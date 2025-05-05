@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:controls="clr-namespace:Avalonia.Notification.Controls;assembly=Notification.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="constructionOrgManagement.Views.DataEditView"
+			 xmlns:vm="using:constructionOrgManagement.ViewModels"
+			 x:DataType="vm:DataEditViewModel">
+	<ScrollViewer>
+		<StackPanel Margin="20" Spacing="15">
+			<TextBlock Text="{Binding SelectedTable, StringFormat='Редактирование: {0}'}"
+                      FontSize="18" FontWeight="Bold"/>
+
+			<ItemsControl ItemsSource="{Binding EditControls}">
+				<ItemsControl.ItemTemplate>
+					<DataTemplate>
+						<ContentControl Content="{Binding}"/>
+					</DataTemplate>
+				</ItemsControl.ItemTemplate>
+			</ItemsControl>
+
+			<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+				<Button Content="Сохранить" Command="{Binding SaveCommand}" Width="100"/>
+				<Button Content="Отмена" Command="{Binding CancelCommand}" Width="100"/>
+			</StackPanel>
+			<Border Grid.Column="1">
+				<controls:NotificationMessageContainer Manager="{Binding NotificationManager}" />
+			</Border>
+		</StackPanel>
+	</ScrollViewer>
+</UserControl>

@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:controls="clr-namespace:Avalonia.Notification.Controls;assembly=Notification.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="constructionOrgManagement.Views.DataManipulationView"
+			 xmlns:vm="using:constructionOrgManagement.ViewModels"
+			 x:DataType="vm:DataManipulationViewModel">
+
+	<Grid>
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="*"/>
+		</Grid.RowDefinitions>
+
+		<StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
+			<TextBlock Text="Таблица:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+			<ComboBox ItemsSource="{Binding AvailableTables}"
+                      SelectedItem="{Binding SelectedTable}"
+                      Width="200" Margin="0,0,10,0"
+					  PlaceholderText="Выберите таблицу"/>
+
+			<Button Content="Обновить" Command="{Binding RefreshDataCommand}" Margin="0,0,10,0"/>
+
+			<TextBlock Text="Поиск:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+			<TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                     Width="200" Margin="0,0,5,0"/>
+			<Button Content="Применить фильтр" Command="{Binding ApplyFilterCommand}"/>
+		</StackPanel>
+
+		<DataGrid Name="tableDataGrid"
+				  Grid.Row="2"
+                  ItemsSource="{Binding CurrentData}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  SelectionMode="Single"
+                  Margin="20"
+				  GridLinesVisibility="All"
+				  BorderThickness="1" 
+				  BorderBrush="Gray"
+				  ColumnWidth="*"
+				  CanUserResizeColumns="True"
+				  CanUserReorderColumns="True"
+				  CanUserSortColumns="False">
+			<DataGrid.ContextMenu>
+				<ContextMenu>
+					<MenuItem Header="Редактировать" Command="{Binding EditCommand}" CommandParameter="{Binding #tableDataGrid.SelectedItem}"/>
+					<MenuItem Header="Удалить" Command="{Binding DeleteCommand}" CommandParameter="{Binding #tableDataGrid.SelectedItem}"/>
+					<Separator/>
+					<MenuItem Header="Копировать" Command="{Binding CopyElementCommand}" CommandParameter="{Binding #tableDataGrid.SelectedItem}"/>
+				</ContextMenu>
+			</DataGrid.ContextMenu>
+			<DataGrid.Columns></DataGrid.Columns>
+		</DataGrid>
+		<Border Grid.Column="1">
+			<controls:NotificationMessageContainer Manager="{Binding NotificationManager}" />
+		</Border>
+	</Grid>
+</UserControl>
