@@ -1,5 +1,6 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Input;
@@ -11,11 +12,10 @@ using constructionOrgManagement.Converters;
 using constructionOrgManagement.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Reflection;
 using System.Threading.Tasks;
 
 namespace constructionOrgManagement.ViewModels
@@ -23,127 +23,77 @@ namespace constructionOrgManagement.ViewModels
     public partial class DataEditViewModel : ViewModelBase
     {
         [ObservableProperty] private string? _selectedTable;
-        [ObservableProperty] private object? _selectedItem;
         [ObservableProperty] private object? _originalEntity;
 
         [ObservableProperty] private List<Control> _editControls = [];
+
+        private class CollectionEditState(
+            object originalCollection,
+            IList currentItems,
+            IList availableItems,
+            Action applyChanges,
+            Action revertChanges)
+        {
+            public object OriginalCollection { get; } = originalCollection;
+            public IList CurrentItems { get; } = currentItems;
+            public IList AvailableItems { get; } = availableItems;
+            public Action ApplyChanges { get; } = applyChanges;
+            public Action RevertChanges { get; } = revertChanges;
+        }
+
+        private readonly List<CollectionEditState> _currentCollectionEditState = [];
+        public ManipulationMode DataManipulationMode { get; set; }
+        public enum ManipulationMode
+        {
+            Edit,
+            Add
+        }
 
         private readonly Thickness _defaultMargin = new(8);
 
         [RelayCommand]
         private async Task Save()
         {
-            if (OriginalEntity == null || SelectedItem == null) return;
+            if (OriginalEntity == null) return;
+
             using var transaction = await dbContext.Database.BeginTransactionAsync();
             try
             {
-                //var entry = dbContext.Entry(OriginalEntity);
-                //entry.CurrentValues.SetValues(SelectedItem);
-
-                //if (SelectedItem is Models.Object obj)
-                //{
-                //    SaveObjectEquipment(obj);
-                //}
-                //await dbContext.SaveChangesAsync();
-                //MainWindowViewModel.Instance?.SwitchContent(typeof(DataManipulationViewModel));
-                var entry = dbContext.Entry(OriginalEntity);
-                entry.CurrentValues.SetValues(SelectedItem);
-
-                if (SelectedItem is Models.Object obj)
+                if (DataManipulationMode == ManipulationMode.Add)
                 {
-                    SaveObjectEquipment(obj);
+                    dbContext.Add(OriginalEntity);
                 }
+                _currentCollectionEditState.ForEach(es => es?.ApplyChanges?.Invoke());
 
                 await dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                MainWindowViewModel.Instance?.SwitchContent(typeof(DataManipulationViewModel));
+                _currentCollectionEditState?.Clear();
+
+                SwitchToDataManipulationView();
             }
             catch (Exception ex)
             {
-                //dbContext.Entry(OriginalEntity).State = EntityState.Unchanged;
                 await transaction.RollbackAsync();
                 CreateNotification("Ошибка", ex.InnerException?.Message ?? ex.Message, NotificationManager, _currentNotification);
             }
         }
 
-        //private static async Task<object> ReloadObjectWithNavigationsAsync(object item)
-        //{
-        //    if (item is Models.Object obj)
-        //    {
-        //        return await dbContext.Objects
-        //        .Include(o => o.ObjectEquipments)
-        //            .ThenInclude(oe => oe.Equipment)
-        //        .Include(o => o.ObjectSite)
-        //        .Include(o => o.ObjectContract)
-        //        .FirstOrDefaultAsync(o => o.ObjectId == obj.ObjectId)
-        //        ?? throw new Exception("Объект не найден в базе данных");
-        //    }
-        //    return null!;
-        //}
-
-        private void SaveObjectEquipment(Models.Object obj)
-        {
-            //if (OriginalEntity is not Models.Object originalObject) return;
-            //originalObject.ObjectEquipments = obj.ObjectEquipments;
-            if (OriginalEntity is not Models.Object originalObject) return;
-
-            // Получаем текущие записи из БД
-            var existingEquipment = dbContext.ObjectEquipments
-                .Where(oe => oe.EquipmentForObjectId == obj.ObjectId)
-                .ToList();
-
-            // Обрабатываем изменения в коллекции
-            foreach (var uiItem in obj.ObjectEquipments)
-            {
-                // Для новых элементов (без ID или с временным ID)
-                if (uiItem.EquipmentId == 0)
-                {
-                    // Убедимся, что Equipment загружен из контекста
-                    var equipmentInContext = dbContext.DepartmentEquipments
-                        .Include(de => de.OrgEquipment)
-                        .FirstOrDefault(de => de.DepartmentEquipmentId == uiItem.EquipmentId);
-
-                    if (equipmentInContext != null)
-                    {
-                        var newEquipment = new ObjectEquipment
-                        {
-                            EquipmentForObjectId = obj.ObjectId,
-                            EquipmentId = equipmentInContext.DepartmentEquipmentId,
-                            Equipment = equipmentInContext,
-                            EquipObjectQuantity = uiItem.EquipObjectQuantity,
-                            AssignmentDate = uiItem.AssignmentDate,
-                            ReturnDate = uiItem.ReturnDate
-                        };
-                        dbContext.ObjectEquipments.Add(newEquipment);
-                    }
-                }
-                else // Для существующих элементов
-                {
-                    var dbItem = existingEquipment.FirstOrDefault(e => e.EquipmentId == uiItem.EquipmentId);
-                    if (dbItem != null)
-                    {
-                        dbItem.EquipObjectQuantity = uiItem.EquipObjectQuantity;
-                        dbItem.AssignmentDate = uiItem.AssignmentDate;
-                        dbItem.ReturnDate = uiItem.ReturnDate;
-                    }
-                }
-            }
-
-            // Удаляем элементы, которые есть в БД, но отсутствуют в UI
-            foreach (var dbItem in existingEquipment)
-            {
-                if (!obj.ObjectEquipments.Any(uiItem => uiItem.EquipmentId == dbItem.EquipmentId))
-                {
-                    dbContext.ObjectEquipments.Remove(dbItem);
-                }
-            }
-        }
-
         [RelayCommand]
-        private static void Cancel()
+        private void Cancel()
+        {
+            _currentCollectionEditState.ForEach(es => es?.RevertChanges?.Invoke());
+
+            if (OriginalEntity != null) dbContext.Entry(OriginalEntity).State = EntityState.Detached;
+
+            _currentCollectionEditState?.Clear();
+
+            SwitchToDataManipulationView();
+        }
+        private void SwitchToDataManipulationView()
         {
             MainWindowViewModel.Instance?.SwitchContent(typeof(DataManipulationViewModel));
+            if (MainWindowViewModel.Instance?.ContentSwitcher is DataManipulationViewModel vm) vm.SelectedTable = SelectedTable;
         }
 
         public void Initialize()
@@ -224,38 +174,215 @@ namespace constructionOrgManagement.ViewModels
                     break;
             }
         }
-        private void CreateObjectControls()
+        private void AddEstimateInObjectControls(Models.Object obj)
         {
-            if (SelectedItem is not Models.Object obj) return;
+            var allPossibleMaterial = dbContext.BuildingMaterials.ToList();
 
-            var foremans = dbContext.Employees.Include(e => e.EmplCategory)
-                                              .Where(e => e.EmplCategory.CategoryType == "Рабочие")
-                                              .Select(e => new
+            var currentEstimate = dbContext.Estimates
+                .Where(e => e.EstimateObjectId == obj.ObjectId)
+                .Include(e => e.Material)
+                .ToList();
+
+            var columns = new Dictionary<string, string>
+            {
+                { "Материал", nameof(EstimateDTO.MaterialName) },
+                { "Стоимость за единицу", nameof(EstimateDTO.UnitPrice) },
+                { "Планируемое количество", nameof(EstimateDTO.PlannedMaterialQuantity) },
+                { "Фактическое количество", nameof(EstimateDTO.ActualMaterialQuantity) }
+            };
+
+            var columnControls = new Dictionary<string, Func<EstimateDTO, Control>>
+            {
+                { nameof(EstimateDTO.MaterialName), dto => new TextBlock { Text = dto.MaterialName, VerticalAlignment = VerticalAlignment.Center } },
+                { nameof(EstimateDTO.UnitPrice), dto => new NumericUpDown
+                    {
+                        FormatString = "F2",
+                        Maximum = decimal.MaxValue,
+                        Minimum = 0
+                    }
+                },
+                { nameof(EstimateDTO.PlannedMaterialQuantity), dto => new NumericUpDown
+                    {
+                        FormatString = "F2",
+                        Maximum = decimal.MaxValue,
+                        Minimum = 0
+                    }
+                },
+                { nameof(EstimateDTO.ActualMaterialQuantity), dto => new NumericUpDown
+                    {
+                        FormatString = "F2",
+                        Maximum = decimal.MaxValue,
+                        Minimum = 0
+                    }
+                },
+            };
+
+            SetupCollectionEditor<Estimate, EstimateDTO>(
+                entityCollection: new ObservableCollection<Estimate>(currentEstimate),
+                allPossibleItems: allPossibleMaterial
+                    .Where(bm => !currentEstimate.Any(e => e.MaterialId == bm.BuildingMaterialId))
+                    .Select(bm => new Estimate
+                    {
+                        MaterialId = bm.BuildingMaterialId,
+                        EstimateObjectId = obj.ObjectId,
+                        PlannedMaterialQuantity = 0,
+                        ActualMaterialQuantity = null,
+                        UnitPrice = 0,
+                        Material = bm
+                    }),
+                entityToViewModel: e => new EstimateDTO
+                {
+                    MaterialId = e.MaterialId,
+                    EstimateObjectId = e.EstimateObjectId,
+                    MaterialName = e.Material.MaterialName,
+                    UnitPrice = e.UnitPrice,
+                    PlannedMaterialQuantity = e.PlannedMaterialQuantity,
+                    ActualMaterialQuantity = e.ActualMaterialQuantity
+                },
+                viewModelToEntity: dto =>
+                {
+                    var existingEntity = dbContext.Estimates.Local.FirstOrDefault(e =>
+                        e.MaterialId == dto.MaterialId && e.EstimateObjectId == dto.EstimateObjectId);
+
+                    if (existingEntity != null)
+                    {
+                        existingEntity.PlannedMaterialQuantity = dto.PlannedMaterialQuantity;
+                        existingEntity.ActualMaterialQuantity = dto.ActualMaterialQuantity;
+                        existingEntity.UnitPrice = dto.UnitPrice;
+                        return existingEntity;
+                    }
+                    else
+                    {
+                        return new Estimate
+                        {
+                            MaterialId = dto.MaterialId,
+                            EstimateObjectId = obj.ObjectId,
+                            PlannedMaterialQuantity = dto.PlannedMaterialQuantity,
+                            ActualMaterialQuantity = dto.ActualMaterialQuantity,
+                            UnitPrice = dto.UnitPrice,
+                            Material = allPossibleMaterial.First(bm => bm.BuildingMaterialId == dto.MaterialId)
+                        };
+                    }
+                },
+                columns: columns,
+                columnControls: columnControls,
+                displayMember: nameof(EstimateDTO.MaterialName),
+                sortSelector: dto => dto.MaterialName,
+                label: "Изменение сметы объекта:",
+                addButtonText: "Добавить материал",
+                placeholderText: "Выберите материал",
+                onAdd: entity => dbContext.Estimates.Add(entity),
+                onRemove: entity => dbContext.Estimates.Remove(entity)
+            );
+        }
+        private void SetupCollectionEditor<TEntity, TViewModel>(
+                        ICollection<TEntity> entityCollection,
+                        IEnumerable<TEntity> allPossibleItems,
+                        Func<TEntity, TViewModel> entityToViewModel,
+                        Func<TViewModel, TEntity> viewModelToEntity,
+                        Dictionary<string, string> columns,
+                        Dictionary<string, Func<TViewModel, Control>> columnControls,
+                        string displayMember,
+                        Func<TViewModel, IComparable> sortSelector,
+                        string label,
+                        string addButtonText = "Добавить",
+                        string placeholderText = "Выберите элемент",
+                        Action<TEntity> onAdd = null!,
+                        Action<TEntity> onRemove = null!)
+        {
+            var originalCopy = entityCollection.ToList();
+
+            var currentItems = new ObservableCollection<TViewModel>(
+                entityCollection.Select(entityToViewModel).OrderBy(x => sortSelector(x)));
+
+            var availableItems = new ObservableCollection<TViewModel>(
+                allPossibleItems.Except(entityCollection)
+                               .Select(entityToViewModel)
+                               .OrderBy(x => sortSelector(x)));
+
+            _currentCollectionEditState.Add(new CollectionEditState(
+                                          originalCollection: originalCopy,
+                                          currentItems: currentItems,
+                                          availableItems: availableItems,
+                                          applyChanges: () =>
+                                          {
+                                              entityCollection.Clear();
+                                              foreach (var vm in currentItems)
                                               {
-                                                  e.EmployeeId,
-                                                  FullName = $"{e.Surname} {e.Name} {e.Patronymic ?? string.Empty}".Trim()
-                                              }).ToList().OrderBy(e => e.FullName);
+                                                  entityCollection.Add(viewModelToEntity(vm));
+                                              }
+                                          },
+                                          revertChanges: () =>
+                                          {
+                                              entityCollection.Clear();
+                                              foreach (TEntity entity in originalCopy)
+                                              {
+                                                  entityCollection.Add(entity);
+                                              }
+                                          }));
 
-            AddTextBoxControl("Название объекта", nameof(Models.Object.ObjectName), 100);
-            AddComboBoxControl("Прораб", nameof(Models.Object.ForemanId), foremans, "FullName", obj.ForemanId!, "EmployeeId");
+            var dataGrid = CreateEditableDataGrid(currentItems, columns, columnControls);
 
-            AddTextBoxControl("Адрес объекта", nameof(Models.Object.ObjectLocation), 150);
+            dataGrid.Columns.Add(new DataGridTemplateColumn
+            {
+                Header = "Действия",
+                CellTemplate = new FuncDataTemplate<TViewModel>((item, _) =>
+                {
+                    var button = new Button { Content = "Удалить", Width = 110, HorizontalContentAlignment = HorizontalAlignment.Center};
+                    button.Click += (s, e) =>
+                    {
+                        var entity = viewModelToEntity(item);
+                        currentItems.Remove(item);
+                        availableItems.Add(item);
+                        entityCollection.Remove(entity);
+                        onRemove?.Invoke(entity);
 
-            AddComboBoxControl("Принадлежит участку", nameof(Models.Object.ObjectSiteId),
-                dbContext.Sites.ToList().OrderBy(s=>s.SiteName), "SiteName", obj.ObjectSiteId, "SiteId");
+                        var sorted = availableItems.OrderBy(x => sortSelector(x)).ToList();
+                        availableItems.Clear();
+                        foreach (var sortedItem in sorted)
+                        {
+                            availableItems.Add(sortedItem);
+                        }
+                    };
+                    return button;
+                })
+            });
 
-            AddComboBoxControl("По контракту", nameof(Models.Object.ObjectContractId),
-                dbContext.Contracts.ToList().OrderBy(c => c.ContractName), "ContractName", obj.ObjectContractId, "ContractId");
+            var comboBox = new ComboBox
+            {
+                ItemsSource = availableItems,
+                PlaceholderText = placeholderText,
+                DisplayMemberBinding = new Binding(displayMember),
+                Margin = _defaultMargin,
+                Width = 250
+            };
 
-            AddComboBoxControl("Категория объекта", nameof(Models.Object.CategoryId),
-                dbContext.ObjectCategories.ToList().OrderBy(oc=>oc.ObjCategoryName),
-                "ObjCategoryName", obj.CategoryId, "ObjectCategoryId");
+            var addButton = new Button { Content = addButtonText };
+            addButton.Click += (s, e) =>
+            {
+                if (comboBox.SelectedItem is TViewModel selectedItem)
+                {
+                    var entity = viewModelToEntity(selectedItem);
+                    currentItems.Add(selectedItem);
+                    availableItems.Remove(selectedItem);
+                    entityCollection.Add(entity);
+                    onAdd?.Invoke(entity);
+                    comboBox.SelectedItem = null;
+                }
+            };
 
+            var choosePanel = new StackPanel
+            {
+                Spacing = 5,
+                Orientation = Orientation.Horizontal,
+                Children = { new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontWeight = Avalonia.Media.FontWeight.Bold }, comboBox, addButton }
+            };
 
-            AddComboBoxControl("Статус объекта", nameof(Models.Object.ObjectStatus),
-                ["in_planning", "in_progress", "completed", "terminated"], "", obj.ObjectStatus);
+            var panel = new StackPanel();
+            panel.Children.Add(choosePanel);
+            panel.Children.Add(dataGrid);
 
-            AddObjectEquipmentInObjectControl(obj);
+            AddControlToEditControls(panel);
         }
 
         private void AddObjectEquipmentInObjectControl(Models.Object obj)
@@ -275,7 +402,7 @@ namespace constructionOrgManagement.ViewModels
                 .Select(o => o.ObjectSite.SiteDepartmentId)
                 .FirstOrDefault();
 
-            var availableEquipment = new ObservableCollection<DepartmentEquipment>( [.. dbContext.DepartmentEquipments
+            var availableEquipment = new ObservableCollection<DepartmentEquipment>([.. dbContext.DepartmentEquipments
                                      .Where(de => de.DepartmentId == departmentId && !currentEquipmentIds.Contains(de.DepartmentEquipmentId))
                                      .Include(de => de.OrgEquipment)]);
 
@@ -296,7 +423,7 @@ namespace constructionOrgManagement.ViewModels
                 { "AssignmentDate", oe => new DatePicker { Width = 300 }},
                 { "ReturnDate", oe => new DatePicker { Width = 300 }}
             };
-            var dataGrid = CreateEditableDataGrid(currentEquipment,columns,columnControls,availableEquipment
+            //var dataGrid = CreateEditableDataGrid(currentEquipment, columns, columnControls, availableEquipment
                            /*item =>
                            {
                                if (item is ObjectEquipment oe)
@@ -306,7 +433,7 @@ namespace constructionOrgManagement.ViewModels
                                        .FirstOrDefault(de => de.DepartmentEquipmentId == oe.EquipmentId)!;
                                }
                                return null!;
-                           }*/);
+                           });*/
 
             var comboBox = new ComboBox
             {
@@ -331,7 +458,7 @@ namespace constructionOrgManagement.ViewModels
                     var newObjectEquipment = new ObjectEquipment
                     {
                         EquipmentForObjectId = obj.ObjectId,
-                        //EquipmentId = equipmentInContext.DepartmentEquipmentId,
+                        //EquipmentId = selectedDeptEquipment.DepartmentEquipmentId,
                         Equipment = equipmentInContext, // Важно: используем объект из контекста
                         EquipObjectQuantity = 1,
                         AssignmentDate = DateOnly.FromDateTime(DateTime.Now)
@@ -349,7 +476,7 @@ namespace constructionOrgManagement.ViewModels
 
             var panel = new StackPanel();
             panel.Children.Add(choosePanel);
-            panel.Children.Add(dataGrid);
+            //panel.Children.Add(dataGrid);
 
             AddControlToEditControls(panel);
         }
@@ -358,7 +485,7 @@ namespace constructionOrgManagement.ViewModels
         {
             var textBox = new TextBox
             {
-                [!TextBox.TextProperty] = new Binding($"SelectedItem.{propertyName}"),
+                [!TextBox.TextProperty] = new Binding($"OriginalEntity.{propertyName}"),
                 Margin = _defaultMargin,
                 Width = 300,
                 MaxLength = maxLenght
@@ -384,14 +511,14 @@ namespace constructionOrgManagement.ViewModels
             var checkBox = new CheckBox
             {
                 IsChecked = initialValue,
-                [!CheckBox.IsCheckedProperty] = new Binding($"SelectedItem.{propertyName}"),
+                [!CheckBox.IsCheckedProperty] = new Binding($"OriginalEntity.{propertyName}"),
                 Margin = _defaultMargin,
                 Width = 300
             };
             var panel = CreateLabeledControlPanel(label, checkBox);
             AddControlToEditControls(panel);
         }
-        private void AddNumericUpDownControl(string label, string propertyName, decimal initialValue, int increment, string formatString = "")
+        private void AddNumericUpDownControl(string label, string propertyName, decimal initialValue, int increment, string formatString = "F0")
         {
             var numericUpDown = new NumericUpDown
             {
@@ -400,7 +527,7 @@ namespace constructionOrgManagement.ViewModels
                 Maximum = decimal.MaxValue,
                 FormatString = formatString,
                 Increment = increment,
-                [!NumericUpDown.ValueProperty] = new Binding($"SelectedItem.{propertyName}") { Mode = BindingMode.TwoWay },
+                [!NumericUpDown.ValueProperty] = new Binding($"OriginalEntity.{propertyName}") { Mode = BindingMode.TwoWay },
                 Margin = _defaultMargin,
                 Width = 300
             };
@@ -422,7 +549,7 @@ namespace constructionOrgManagement.ViewModels
         {
             var datePicker = new DatePicker
             {
-                [!DatePicker.SelectedDateProperty] = new Binding($"SelectedItem.{propertyName}")
+                [!DatePicker.SelectedDateProperty] = new Binding($"OriginalEntity.{propertyName}")
                 {
                     Converter = new Converters.DateConverter()
                 },
@@ -499,7 +626,7 @@ namespace constructionOrgManagement.ViewModels
         {
             comboBox.SelectionChanged += (sender, e) =>
             {
-                if (SelectedItem != null && comboBox.SelectedItem != null)
+                if (OriginalEntity != null && comboBox.SelectedItem != null)
                 {
                     UpdateSelectedItemProperty(comboBox.SelectedItem, propertyName,
                                              isPrimitive, displayMember, valueMember);
@@ -510,7 +637,7 @@ namespace constructionOrgManagement.ViewModels
         private void UpdateSelectedItemProperty(object selectedComboItem, string propertyName,
                                               bool isPrimitive, string displayMember, string valueMember)
         {
-            var prop = SelectedItem!.GetType().GetProperty(propertyName);
+            var prop = OriginalEntity!.GetType().GetProperty(propertyName);
             if (prop == null) return;
 
             object valueToSet = isPrimitive
@@ -519,7 +646,7 @@ namespace constructionOrgManagement.ViewModels
 
             if (valueToSet != null)
             {
-                prop.SetValue(SelectedItem, valueToSet);
+                prop.SetValue(OriginalEntity, valueToSet);
             }
         }
 
@@ -545,14 +672,13 @@ namespace constructionOrgManagement.ViewModels
         }
         private void AddControlToEditControls(Control control)
         {
+            control.HorizontalAlignment = HorizontalAlignment.Center;
             EditControls.Add(control);
         }
-        private DataGrid CreateEditableDataGrid<T, TSource>(
-    ObservableCollection<T> itemsSource,
-    Dictionary<string, string> columns,
-    Dictionary<string, Func<T, Control>> columnControls,
-    ObservableCollection<TSource> sourceCollection = null!,
-    Func<T, TSource> itemToSourceConverter = null!) where TSource : class
+        private DataGrid CreateEditableDataGrid<T>(
+                                ObservableCollection<T> itemsSource,
+                                Dictionary<string, string> columns,
+                                Dictionary<string, Func<T, Control>> columnControls)
         {
             var dataGrid = new DataGrid
             {
@@ -562,10 +688,13 @@ namespace constructionOrgManagement.ViewModels
                 CanUserSortColumns = true,
                 CanUserResizeColumns = true,
                 Margin = _defaultMargin,
-                Width = 1000,
+
+                HorizontalAlignment = HorizontalAlignment.Center,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                MaxWidth = 1200
             };
 
-            // Добавляем колонки из словаря columns
             foreach (var column in columns)
             {
                 var propertyName = column.Value;
@@ -593,56 +722,6 @@ namespace constructionOrgManagement.ViewModels
                     });
                 }
             }
-
-            // Добавляем колонку с кнопкой удаления
-            dataGrid.Columns.Add(new DataGridTemplateColumn
-            {
-                Header = "Действия",
-                CellTemplate = new FuncDataTemplate<T>((item, _) =>
-                {
-                    var button = new Button { Content = "Удалить" };
-                    button.Click += (s, e) =>
-                    {
-                        if (item is ObjectEquipment oe)
-                        {
-                            // Возвращаем оборудование в список доступных
-                            if (sourceCollection != null)
-                            {
-                                var deptEquipment = dbContext.DepartmentEquipments
-                                    .FirstOrDefault(de => de.DepartmentEquipmentId == oe.EquipmentId);
-                                if (deptEquipment != null && deptEquipment is TSource sourceItem)
-                                {
-                                    sourceCollection.Add(sourceItem);
-                                }
-                            }
-
-                            // Удаляем из текущей коллекции
-                            itemsSource.Remove(item);
-
-                            // Если редактируемый объект - Models.Object, удаляем из его коллекции
-                            if (SelectedItem is Models.Object obj)
-                            {
-                                obj.ObjectEquipments.Remove(oe);
-                            }
-                        }
-                        else
-                        {
-                            // Общая логика для других типов
-                            itemsSource.Remove(item);
-                            if (sourceCollection != null && itemToSourceConverter != null)
-                            {
-                                var sourceItem = itemToSourceConverter(item);
-                                if (sourceItem != null)
-                                {
-                                    sourceCollection.Add(sourceItem);
-                                }
-                            }
-                        }
-                    };
-                    return button;
-                })
-            });
-
             return dataGrid;
         }
         private static void SetupControlBinding(Control control, string propertyName)
@@ -650,10 +729,13 @@ namespace constructionOrgManagement.ViewModels
             switch (control)
             {
                 case TextBox textBox:
-                    textBox[!TextBox.TextProperty] = new Binding(propertyName);
+                    textBox[!TextBox.TextProperty] = new Binding(propertyName, BindingMode.TwoWay);
                     break;
                 case NumericUpDown numericUpDown:
                     numericUpDown[!NumericUpDown.ValueProperty] = new Binding(propertyName);
+                    numericUpDown.AddHandler(InputElement.TextInputEvent, static (sender, e) => {
+                        if (!char.IsDigit(e.Text![0])) e.Handled = true;
+                    }, RoutingStrategies.Tunnel);
                     break;
                 case DatePicker datePicker:
                     datePicker[!DatePicker.SelectedDateProperty] = new Binding(propertyName)
@@ -669,11 +751,33 @@ namespace constructionOrgManagement.ViewModels
                     break;
                 default:
                     break;
-                
-                //case ComboBox:
-                //    // Для ComboBox нужно дополнительно настроить ItemsSource и SelectedValue
-                //    break;
+
+                    //case ComboBox:
+                    //    // Для ComboBox нужно дополнительно настроить ItemsSource и SelectedValue
+                    //    break;
             }
         }
     }
+    public class ItemIdAndValueDTO
+    {
+        public int ItemId { get; set; }
+        public required string ValueString { get; set; }
+    }
+    public class SpecificItemCharacteristicValueDTO
+    {
+        public int CharacteristicId { get; set; }
+        public int SpecificItemId { get; set; }
+        public required string CharacteristicValue { get; set; }
+        public required string CharacteristicName { get; set; }
+    }
+    public class EstimateDTO
+    {
+        public int MaterialId { get; set; }
+        public int EstimateObjectId { get; set; }
+        public required string MaterialName { get; set; }
+        public decimal PlannedMaterialQuantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal? ActualMaterialQuantity { get; set; }
+    }
 }
+

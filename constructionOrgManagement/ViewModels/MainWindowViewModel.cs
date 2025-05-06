@@ -2,6 +2,7 @@
 using constructionOrgManagement.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace constructionOrgManagement.ViewModels
@@ -11,7 +12,7 @@ namespace constructionOrgManagement.ViewModels
         [ObservableProperty] private ViewModelBase? contentSwitcher;
         private readonly DataManipulationViewModel _dataManipulationVM = new();
         private readonly DataEditViewModel _dataEditVM = new();
-        
+
         public static MainWindowViewModel? Instance { get; private set; }
 
         public MainWindowViewModel()

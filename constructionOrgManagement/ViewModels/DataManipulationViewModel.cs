@@ -1,4 +1,5 @@
 ﻿using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Notification;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -8,6 +9,7 @@ using constructionOrgManagement.Views;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,6 +26,10 @@ namespace constructionOrgManagement.ViewModels
         [ObservableProperty] private string? _filterText;
 
         [ObservableProperty] private List<object>? _currentData;
+        [ObservableProperty] private List<object>? _originalData;
+
+        [ObservableProperty] private ObservableCollection<object>? _filterColumns = [];
+        [ObservableProperty] private string? _filterColumn = null;
         public string? SelectedTable
         {
             get => _selectedTable;
@@ -34,8 +40,51 @@ namespace constructionOrgManagement.ViewModels
                     _selectedTable = value;
                     OnPropertyChanged(nameof(SelectedTable));
                     RefreshData();
+                    UpdateFilterColumns();
                 }
             }
+        }
+        partial void OnFilterTextChanged(string? value)
+        {
+            if (CurrentData == null || OriginalData == null) return;
+
+            if (string.IsNullOrWhiteSpace(FilterText))
+            {
+                CurrentData = OriginalData.ToList();
+                return;
+            }
+
+            List<object> filteredItems = [];
+            if (FilterColumn == null || FilterColumn == "Все поля")
+            {
+                filteredItems = OriginalData
+                    .Where(item => item.GetType().GetProperties()
+                    .Where(prop => !prop.Name.Contains("id", StringComparison.OrdinalIgnoreCase))
+                        .Any(prop =>
+                        {
+                            var value = prop.GetValue(item)?.ToString();
+                            return value != null && value.Contains(FilterText, StringComparison.OrdinalIgnoreCase);
+                        }))
+                    .ToList();
+            }
+            else
+            {
+                filteredItems = OriginalData.Where(item =>
+                                {
+                                    var prop = item.GetType().GetProperty(FilterColumn);
+                                    if (prop == null) return false;
+
+                                    var propValue = prop.GetValue(item)?.ToString();
+                                    return propValue != null &&
+                                           propValue.Contains(FilterText, StringComparison.OrdinalIgnoreCase);
+                                }).ToList();
+            }
+
+            CurrentData = filteredItems;
+        }
+        partial void OnFilterColumnChanged(string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(FilterText)) OnFilterTextChanged(FilterText);
         }
 
         public DataManipulationViewModel()
@@ -118,26 +167,29 @@ namespace constructionOrgManagement.ViewModels
             if (employee == null) return null;
             return string.Join(" ", employee.Surname, employee.Name, employee.Patronymic ?? string.Empty);
         }
+        private void UpdateFilterColumns()
+        {
+            if (OriginalData == null || FilterColumns == null || OriginalData.Count == 0) return;
+
+            FilterColumns.Clear();
+
+            var properties = OriginalData[0].GetType()
+                                    .GetProperties()
+                                    .Where(p => !p.Name.Contains("Id", StringComparison.OrdinalIgnoreCase))
+                                    .ToList();
+
+            foreach (var prop in properties)
+            {
+                FilterColumns.Add(prop.Name);
+            }
+            FilterColumns.Add("Все поля");
+        }
         [RelayCommand]
         private void RefreshData()
         {
             CurrentData = GetEnhancedData(SelectedTable);
-        }
-        [RelayCommand]
-        private void ApplyFilter()
-        {
-            if (CurrentData == null || string.IsNullOrWhiteSpace(FilterText)) return;
-
-            var filteredItems = CurrentData
-                .Where(item => item.GetType().GetProperties()
-                    .Any(prop =>
-                    {
-                        var value = prop.GetValue(item)?.ToString();
-                        return value != null && value.Contains(FilterText, StringComparison.OrdinalIgnoreCase);
-                    }))
-                .ToList();
-
-            CurrentData = filteredItems;
+            OriginalData = CurrentData;
+            OnFilterColumnChanged(FilterColumn);
         }
         [RelayCommand]
         private void Edit(object selectedItem)
@@ -145,12 +197,15 @@ namespace constructionOrgManagement.ViewModels
             if (selectedItem == null) return;
 
             var originalEntity = FindOriginalEntity(selectedItem, GetEntityType(SelectedTable));
-            dbContext.Entry(originalEntity!).Collection("ObjectEquipments").Load();
-
-            var itemCopy = CloneObject(originalEntity!);
-            dbContext.Entry(itemCopy!).Collection("ObjectEquipments").Load();
-
-            bool res = itemCopy == originalEntity;
+            if (originalEntity is Models.Object)
+            {
+                dbContext.Entry(originalEntity).Collection("MasterEmployees").Load();
+                dbContext.Entry(originalEntity).Collection("SpecificObjectCharacteristics").Load();
+                dbContext.Entry(originalEntity).Collection("Estimates").Load();
+            }
+            else if (originalEntity is Brigade) dbContext.Entry(originalEntity).Collection("Workers").Load();
+            else if (originalEntity is Employee) dbContext.Entry(originalEntity).Collection("SpecificEmployeeAttributes").Load(); 
+            //dbContext.Entry(originalEntity!).Collection("ObjectEquipments").Load();
 
             if (originalEntity == null) return;
 
@@ -159,10 +214,34 @@ namespace constructionOrgManagement.ViewModels
             if (MainWindowViewModel.Instance?.ContentSwitcher is DataEditViewModel editVm)
             {
                 editVm.SelectedTable = SelectedTable;
-                editVm.SelectedItem = itemCopy;
                 editVm.OriginalEntity = originalEntity;
+                editVm.DataManipulationMode = DataEditViewModel.ManipulationMode.Edit;
                 editVm.Initialize();
                 SelectedTable = null;
+                FilterText = null;
+            }
+        }
+        [RelayCommand]
+        private void Add()
+        {
+            if (SelectedTable == null) return;
+
+            var entityType = GetEntityType(SelectedTable);
+            if (entityType == null) return;
+
+            var newEntity = Activator.CreateInstance(entityType);
+            if (newEntity == null) return;
+
+            MainWindowViewModel.Instance?.SwitchContent(typeof(DataEditViewModel));
+
+            if (MainWindowViewModel.Instance?.ContentSwitcher is DataEditViewModel editVm)
+            {
+                editVm.SelectedTable = SelectedTable;
+                editVm.OriginalEntity = newEntity;
+                editVm.DataManipulationMode = DataEditViewModel.ManipulationMode.Add;
+                editVm.Initialize();
+                SelectedTable = null;
+                FilterText = null;
             }
         }
         [RelayCommand]

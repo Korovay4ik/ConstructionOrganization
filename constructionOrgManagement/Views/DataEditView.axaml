@@ -9,8 +9,8 @@
 			 x:DataType="vm:DataEditViewModel">
 	<ScrollViewer>
 		<StackPanel Margin="20" Spacing="15">
-			<TextBlock Text="{Binding SelectedTable, StringFormat='Редактирование: {0}'}"
-                      FontSize="18" FontWeight="Bold"/>
+			<TextBlock Text="{Binding SelectedTable, StringFormat='Редактирование таблицы {0}'}"
+                      FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
 
 			<ItemsControl ItemsSource="{Binding EditControls}">
 				<ItemsControl.ItemTemplate>

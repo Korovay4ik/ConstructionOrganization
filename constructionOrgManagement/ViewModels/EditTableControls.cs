@@ -1,19 +1,73 @@
-﻿using constructionOrgManagement.Models;
+﻿using Avalonia.Controls;
+using Avalonia.Data;
+using Avalonia.Layout;
+using CommunityToolkit.Mvvm.DependencyInjection;
+using constructionOrgManagement.Models;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 
 namespace constructionOrgManagement.ViewModels
 {
     public partial class DataEditViewModel
     {
+        private void CreateObjectControls()
+        {
+            if (OriginalEntity is not Models.Object obj) return;
+
+            var foremans = dbContext.Employees.Include(e => e.EmplCategory)
+                                              .Where(e => e.EmplCategory.CategoryType == "Рабочие" && e.FireDate == null)
+                                              .Select(e => new
+                                              {
+                                                  e.EmployeeId,
+                                                  FullName = $"{e.Surname} {e.Name} {e.Patronymic ?? string.Empty}".Trim()
+                                              }).ToList().OrderBy(e => e.FullName);
+
+            AddTextBoxControl("Название объекта", nameof(Models.Object.ObjectName), 100);
+            AddComboBoxControl("Прораб", nameof(Models.Object.ForemanId), foremans, "FullName", obj.ForemanId!, "EmployeeId");
+
+            AddTextBoxControl("Адрес объекта", nameof(Models.Object.ObjectLocation), 150);
+
+            AddComboBoxControl("Принадлежит участку", nameof(Models.Object.ObjectSiteId),
+                dbContext.Sites.ToList().OrderBy(s => s.SiteName), "SiteName", obj.ObjectSiteId, "SiteId");
+
+            AddComboBoxControl("По контракту", nameof(Models.Object.ObjectContractId),
+                dbContext.Contracts.ToList().OrderBy(c => c.ContractName), "ContractName", obj.ObjectContractId, "ContractId");
+
+            AddComboBoxControl("Категория объекта", nameof(Models.Object.CategoryId),
+                dbContext.ObjectCategories.ToList().OrderBy(oc => oc.ObjCategoryName),
+                "ObjCategoryName", obj.CategoryId, "ObjectCategoryId");
+
+
+            AddComboBoxControl("Статус объекта", nameof(Models.Object.ObjectStatus),
+                ["in_planning", "in_progress", "completed", "terminated"], "", obj.ObjectStatus);
+
+            //AddObjectEquipmentInObjectControl(obj);
+            AddMasterOnObjectControl(obj);
+            AddSpecificObjectCharacteristicInObjectControls(obj);
+            AddEstimateInObjectControls(obj);
+        }
         private void CreateObjectEquipmentControls()
         {
-            if (SelectedItem is not ObjectEquipment oe) return;
+            if (OriginalEntity is not ObjectEquipment oe) return;
 
-            AddTextBlockControl("Объект", dbContext.Objects.FirstOrDefault(o => o.ObjectId == oe.EquipmentForObjectId)?.ObjectName);
-            AddTextBlockControl("Название техники", dbContext.DepartmentEquipments
+            if (DataManipulationMode == ManipulationMode.Add)
+            {
+                AddComboBoxControl("Объект", nameof(ObjectEquipment.EquipmentForObjectId), dbContext.Objects.ToList().OrderBy(o => o.ObjectName),
+                    "ObjectName", oe.EquipmentForObjectId, "ObjectId");
+                AddComboBoxControl("Название техники", nameof(ObjectEquipment.EquipmentId), dbContext.DepartmentEquipments.Include(de=>de.OrgEquipment).ToList().OrderBy(o=>o.OrgEquipment.EquipmentName),
+                    "OrgEquipment.EquipmentName", oe.EquipmentId, "DepartmentEquipmentId");
+                oe.AssignmentDate = DateOnly.FromDateTime(DateTime.Now);
+            }
+            else
+            {
+                AddTextBlockControl("Объект", dbContext.Objects.FirstOrDefault(o => o.ObjectId == oe.EquipmentForObjectId)?.ObjectName);
+                AddTextBlockControl("Название техники", dbContext.DepartmentEquipments
                                                              .Include(de => de.OrgEquipment)
                                                              .FirstOrDefault(de => de.DepartmentEquipmentId == oe.EquipmentId)?.OrgEquipment?.EquipmentName);
+            }
             AddNumericUpDownControl("Количество техники", nameof(ObjectEquipment.EquipObjectQuantity), oe.EquipObjectQuantity, 1);
             AddDatePickerControl("Дата выдачи", nameof(ObjectEquipment.AssignmentDate));
             AddDatePickerControl("Дата возврата", nameof(ObjectEquipment.ReturnDate));
@@ -21,16 +75,27 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateWorkTypeForCategoryControls()
         {
-            if (SelectedItem is not WorkTypeForCategory wtfc) return;
+            if (OriginalEntity is not WorkTypeForCategory wtfc) return;
 
-            AddTextBlockControl("Категория объекта", dbContext.ObjectCategories.FirstOrDefault(oc => oc.ObjectCategoryId == wtfc.SpecificCategoryId)?.ObjCategoryName);
-            AddTextBlockControl("Тип работ", dbContext.WorkTypes.FirstOrDefault(wt => wt.WorkTypeId == wtfc.WtfcWorkTypeId)?.WorkTypeName);
+            if (DataManipulationMode == ManipulationMode.Add)
+            {
+                AddComboBoxControl("Категория объекта", nameof(WorkTypeForCategory.SpecificCategoryId), dbContext.ObjectCategories.ToList().OrderBy(oc=>oc.ObjCategoryName),
+                    "ObjCategoryName", wtfc.SpecificCategoryId, "ObjectCategoryId");
+                AddComboBoxControl("Тип работ", nameof(WorkTypeForCategory.WtfcWorkTypeId), dbContext.WorkTypes.ToList().OrderBy(wt=>wt.WorkTypeName),
+                    "WorkTypeName", wtfc.WtfcWorkTypeId, "WorkTypeId");
+                wtfc.IsMandatory = false;
+            }
+            else
+            {
+                AddTextBlockControl("Категория объекта", dbContext.ObjectCategories.FirstOrDefault(oc => oc.ObjectCategoryId == wtfc.SpecificCategoryId)?.ObjCategoryName);
+                AddTextBlockControl("Тип работ", dbContext.WorkTypes.FirstOrDefault(wt => wt.WorkTypeId == wtfc.WtfcWorkTypeId)?.WorkTypeName);
+            }
             AddCheckBoxControl("Является обязательным", nameof(WorkTypeForCategory.IsMandatory), wtfc.IsMandatory ?? false);
         }
 
         private void CreateWorkTypeControls()
         {
-            if (SelectedItem is not WorkType) return;
+            if (OriginalEntity is not WorkType) return;
 
             AddTextBoxControl("Название работ", nameof(WorkType.WorkTypeName), 100);
             AddTextBoxControl("Описание", nameof(WorkType.WorkTypeDescription));
@@ -38,7 +103,7 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateWorkScheduleControl()
         {
-            if (SelectedItem is not WorkSchedule ws) return;
+            if (OriginalEntity is not WorkSchedule ws) return;
 
             var selectedObject = dbContext.Objects.FirstOrDefault(o => o.ObjectId == ws.ScheduleObjectId);
 
@@ -63,30 +128,56 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateSpecificObjectCharacteristicControls()
         {
-            if (SelectedItem is not SpecificObjectCharacteristic soc) return;
+            if (OriginalEntity is not SpecificObjectCharacteristic soc) return;
 
-            AddTextBlockControl("Объект", dbContext.Objects.FirstOrDefault(o => o.ObjectId == soc.SpecificObjectId)?.ObjectName);
-            AddTextBlockControl("Характеристика", dbContext.ObjectCharacteristics.FirstOrDefault(oc => oc.ObjectCharacteristicId == soc.CharacteristicId)?.ObjCharacteristicName);
+            if (DataManipulationMode == ManipulationMode.Add)
+            {
+                AddComboBoxControl("Объект", nameof(SpecificObjectCharacteristic.SpecificObjectId), dbContext.Objects.ToList().OrderBy(o=>o.ObjectName),
+                    "ObjectName", soc.SpecificObjectId, "ObjectId");
+                AddComboBoxControl("Характеристика", nameof(SpecificObjectCharacteristic.CharacteristicId), dbContext.ObjectCharacteristics.ToList().OrderBy(oc=>oc.ObjCharacteristicName),
+                    "ObjCharacteristicName", soc.CharacteristicId, "ObjectCharacteristicId");
+            }
+            else
+            { 
+                AddTextBlockControl("Объект", dbContext.Objects.FirstOrDefault(o => o.ObjectId == soc.SpecificObjectId)?.ObjectName);
+                AddTextBlockControl("Характеристика", dbContext.ObjectCharacteristics.FirstOrDefault(oc => oc.ObjectCharacteristicId == soc.CharacteristicId)?.ObjCharacteristicName);
+            }
+            
             AddTextBoxControl("Значение", nameof(SpecificObjectCharacteristic.CharacteristicValue), 255);
         }
 
         private void CreateSpecificEmployeeAttributeControls()
         {
-            if (SelectedItem is not SpecificEmployeeAttribute sea) return;
+            if (OriginalEntity is not SpecificEmployeeAttribute sea) return;
 
-            var employee = dbContext.Employees.FirstOrDefault(e => e.EmployeeId == sea.SpecificEmployeeId);
-            AddTextBlockControl("Сотрудник", DataManipulationViewModel.GetFullName(employee));
-            AddTextBlockControl("Название атрибута", dbContext.EmployeeAttributes.FirstOrDefault(ea => ea.EmployeeAttributeId == sea.AttributeId)?.AttributeName);
+            if (DataManipulationMode == ManipulationMode.Add)
+            {
+                var employeeList = dbContext.Employees.Select(e => new
+                                                      {
+                                                          e.EmployeeId,
+                                                          FullName = $"{e.Surname} {e.Name} {e.Patronymic ?? string.Empty}".Trim()
+                                                      }).ToList().OrderBy(e => e.FullName);
+                AddComboBoxControl("Сотрудник", nameof(SpecificEmployeeAttribute.SpecificEmployeeId),
+                    employeeList, "FullName", sea.SpecificEmployeeId, "EmployeeId");
+                AddComboBoxControl("Название атрибута", nameof(SpecificEmployeeAttribute.AttributeId), dbContext.EmployeeAttributes.ToList().OrderBy(ea=>ea.AttributeName),
+                    "AttributeName", sea.AttributeId, "EmployeeAttributeId");
+            }
+            else
+            {
+                var employee = dbContext.Employees.FirstOrDefault(e => e.EmployeeId == sea.SpecificEmployeeId);
+                AddTextBlockControl("Сотрудник", DataManipulationViewModel.GetFullName(employee));
+                AddTextBlockControl("Название атрибута", dbContext.EmployeeAttributes.FirstOrDefault(ea => ea.EmployeeAttributeId == sea.AttributeId)?.AttributeName);
+            }
             AddTextBoxControl("Значение", nameof(SpecificEmployeeAttribute.AttributeValue), 255);
         }
 
         private void CreateSiteControls()
         {
-            if (SelectedItem is not Site site) return;
+            if (OriginalEntity is not Site site) return;
 
             AddTextBoxControl("Название участка", nameof(Site.SiteName), 100);
             var siteSupervisors = dbContext.Employees.Include(e => e.EmplCategory)
-                                                .Where(e => e.EmplCategory.CategoryType == "Инженерно-технический персонал")
+                                                .Where(e => e.EmplCategory.CategoryType == "Инженерно-технический персонал" && e.FireDate == null)
                                                 .Select(e => new
                                                 {
                                                     e.EmployeeId,
@@ -101,7 +192,7 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateOrganizationEquipmentControls()
         {
-            if (SelectedItem is not OrganizationEquipment oe) return;
+            if (OriginalEntity is not OrganizationEquipment oe) return;
 
             AddTextBoxControl("Название техники", nameof(OrganizationEquipment.EquipmentName), 100);
             AddNumericUpDownControl("Количество техники", nameof(OrganizationEquipment.OrgEquipmentQuantity), oe.OrgEquipmentQuantity, 1);
@@ -109,36 +200,42 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateObjectCharacteristicControls()
         {
-            if (SelectedItem is not ObjectCharacteristic) return;
+            if (OriginalEntity is not ObjectCharacteristic) return;
 
             AddTextBoxControl("Название характеристики", nameof(ObjectCharacteristic.ObjCharacteristicName), 50);
         }
 
         private void CreateObjectCategoryControls()
         {
-            if (SelectedItem is not ObjectCategory) return;
+            if (OriginalEntity is not ObjectCategory) return;
 
             AddTextBoxControl("Название категории", nameof(ObjectCategory.ObjCategoryName), 50);
         }
 
         private void CreateEstimateControls()
         {
-            if (SelectedItem is not Estimate estimate) return;
+            if (OriginalEntity is not Estimate estimate) return;
 
-            AddTextBlockControl("Материал", dbContext.BuildingMaterials.FirstOrDefault(bm => bm.BuildingMaterialId == estimate.MaterialId)?.MaterialName);
-            AddTextBlockControl("Объект", dbContext.Objects.FirstOrDefault(o => o.ObjectId == estimate.EstimateObjectId)?.ObjectName);
-            //AddComboBoxControl("Материал", nameof(Estimate.MaterialId), dbContext.BuildingMaterials.ToList().OrderBy(bm=>bm.MaterialName),
-            //    "MaterialName", estimate.MaterialId, "BuildingMaterialId");
-            //AddComboBoxControl("Объект", nameof(Estimate.EstimateObjectId), dbContext.Objects.ToList().OrderBy(o=>o.ObjectName),
-            //    "ObjectName", estimate.EstimateObjectId, "ObjectId");
+            if (DataManipulationMode == ManipulationMode.Add)
+            {
+                AddComboBoxControl("Материал", nameof(Estimate.MaterialId), dbContext.BuildingMaterials.ToList().OrderBy(bm => bm.MaterialName),
+                    "MaterialName", estimate.MaterialId, "BuildingMaterialId");
+                AddComboBoxControl("Объект", nameof(Estimate.EstimateObjectId), dbContext.Objects.ToList().OrderBy(o => o.ObjectName),
+                    "ObjectName", estimate.EstimateObjectId, "ObjectId");
+            }
+            else
+            {
+                AddTextBlockControl("Материал", dbContext.BuildingMaterials.FirstOrDefault(bm => bm.BuildingMaterialId == estimate.MaterialId)?.MaterialName);
+                AddTextBlockControl("Объект", dbContext.Objects.FirstOrDefault(o => o.ObjectId == estimate.EstimateObjectId)?.ObjectName);
+            }
             AddNumericUpDownControl("Плановое количество", nameof(Estimate.PlannedMaterialQuantity), estimate.PlannedMaterialQuantity, 100, "F2");
             AddNumericUpDownControl("Цена за единицу", nameof(Estimate.UnitPrice), estimate.UnitPrice, 1, "F2");
-            //AddNumericUpDownControl("Фактическое количество", nameof(Estimate.ActualMaterialQuantity), estimate.ActualMaterialQuantity, 100, "F2");
+            AddNumericUpDownControl("Фактическое количество", nameof(Estimate.ActualMaterialQuantity), estimate.ActualMaterialQuantity ?? 0, 100, "F2");
         }
 
         private void CreateEmployeeCategoryControls()
         {
-            if (SelectedItem is not EmployeeCategory ec) return;
+            if (OriginalEntity is not EmployeeCategory ec) return;
 
             AddTextBoxControl("Название должности", nameof(EmployeeCategory.EmplCategoryName), 50);
             AddComboBoxControl("Тип категории", nameof(EmployeeCategory.CategoryType), ["Рабочие", "Инженерно-технический персонал"],
@@ -147,14 +244,14 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateEmployeeAttributeControls()
         {
-            if (SelectedItem is not EmployeeAttribute) return;
+            if (OriginalEntity is not EmployeeAttribute) return;
 
             AddTextBoxControl("Название атрибута", nameof(EmployeeAttribute.AttributeName), 100);
         }
 
         private void CreateDepartmentEquipmentControls()
         {
-            if (SelectedItem is not DepartmentEquipment de) return;
+            if (OriginalEntity is not DepartmentEquipment de) return;
 
             AddComboBoxControl("Название техники", nameof(DepartmentEquipment.OrgEquipmentId),
                 dbContext.OrganizationEquipments.ToList().OrderBy(oe => oe.EquipmentName), "EquipmentName", de.OrgEquipmentId, "OrganizationEquipmentId");
@@ -165,14 +262,14 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateCustomerControls()
         {
-            if (SelectedItem is not Customer) return;
+            if (OriginalEntity is not Customer) return;
 
             AddTextBoxControl("Клиент", nameof(Customer.CustomerName), 100);
         }
 
         private void CreateContractControls()
         {
-            if (SelectedItem is not Contract contract) return;
+            if (OriginalEntity is not Contract contract) return;
 
             AddTextBoxControl("Название контракта", nameof(Contract.ContractName));
             AddComboBoxControl("Клиент", nameof(Contract.ContractCustomerId),
@@ -183,13 +280,13 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateConstructionDepartmentControls()
         {
-            if (SelectedItem is not ConstructionDepartment cd) return;
+            if (OriginalEntity is not ConstructionDepartment cd) return;
 
             AddTextBoxControl("Название управления", nameof(ConstructionDepartment.DepartmentName), 100);
             AddTextBoxControl("Адрес управления", nameof(ConstructionDepartment.DepartmentLocation), 150);
 
             var departSupervisors = dbContext.Employees.Include(e => e.EmplCategory)
-                                                .Where(e => e.EmplCategory.CategoryType == "Инженерно-технический персонал")
+                                                .Where(e => e.EmplCategory.CategoryType == "Инженерно-технический персонал" && e.FireDate == null)
                                                 .Select(e => new
                                                 {
                                                     e.EmployeeId,
@@ -201,7 +298,7 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateBuildingMaterialControls()
         {
-            if (SelectedItem is not BuildingMaterial) return;
+            if (OriginalEntity is not BuildingMaterial) return;
 
             AddTextBoxControl("Название материала", nameof(BuildingMaterial.MaterialName), 100);
             AddTextBoxControl("Единица измерения", nameof(BuildingMaterial.UnitOfMeasure), 20);
@@ -209,7 +306,7 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateEmployeeControls()
         {
-            if (SelectedItem is not Employee employee) return;
+            if (OriginalEntity is not Employee employee) return;
 
             AddTextBoxControl("Имя", nameof(Employee.Name), 50);
             AddTextBoxControl("Фамилия", nameof(Employee.Surname), 50);
@@ -228,16 +325,18 @@ namespace constructionOrgManagement.ViewModels
 
             AddDatePickerControl("Дата приема", nameof(Employee.HireDate));
             AddDatePickerControl("Дата увольнения", nameof(Employee.FireDate));
+
+            AddSpecificEmployeeAttributeInEmployeeControls(employee);
         }
 
         private void CreateBrigadeControls()
         {
-            if (SelectedItem is not Brigade brigade) return;
+            if (OriginalEntity  is not Brigade brigade) return;
 
             AddTextBoxControl("Название бригады", nameof(Brigade.BrigadeName), 100);
 
             var brigadiers = dbContext.Employees.Include(e => e.EmplCategory)
-                                                .Where(e => e.EmplCategory.CategoryType == "Рабочие")
+                                                .Where(e => e.EmplCategory.CategoryType == "Рабочие" && e.FireDate == null)
                                                 .Select(e => new
                                                 {
                                                     e.EmployeeId,
@@ -247,6 +346,222 @@ namespace constructionOrgManagement.ViewModels
 
             AddComboBoxControl("Статус бригады", nameof(Brigade.BrigadeStatus),
                 ["active", "terminated"], "", brigade.BrigadeStatus);
+
+            AddBrigadeCompositionControl(brigade);
+        }
+        private void AddSpecificEmployeeAttributeInEmployeeControls(Employee employee)
+        {
+            var allPossibleAttributes = dbContext.EmployeeAttributes.ToList();
+
+            var currentAttributes = dbContext.SpecificEmployeeAttributes
+                .Where(sea => sea.SpecificEmployeeId == employee.EmployeeId)
+                .Include(sea => sea.Attribute)
+                .ToList();
+
+            var columns = new Dictionary<string, string>
+            {
+                { "Атрибут", nameof(SpecificItemCharacteristicValueDTO.CharacteristicName) },
+                { "Значение", nameof(SpecificItemCharacteristicValueDTO.CharacteristicValue) }
+            };
+
+            var columnControls = new Dictionary<string, Func<SpecificItemCharacteristicValueDTO, Control>>
+            {
+                { nameof(SpecificItemCharacteristicValueDTO.CharacteristicName), vm => new TextBlock { Text = vm.CharacteristicName } },
+                { nameof(SpecificItemCharacteristicValueDTO.CharacteristicValue), vm => new TextBox
+                    {
+                        MaxLength = 255,
+                        [!TextBox.TextProperty] = new Binding(nameof(SpecificItemCharacteristicValueDTO.CharacteristicValue), BindingMode.TwoWay)
+                    }
+                }
+            };
+
+            SetupCollectionEditor<SpecificEmployeeAttribute, SpecificItemCharacteristicValueDTO>(
+                entityCollection: new ObservableCollection<SpecificEmployeeAttribute>(currentAttributes),
+                allPossibleItems: allPossibleAttributes
+                    .Where(a => !currentAttributes.Any(ca => ca.AttributeId == a.EmployeeAttributeId))
+                    .Select(a => new SpecificEmployeeAttribute
+                    {
+                        AttributeId = a.EmployeeAttributeId,
+                        SpecificEmployeeId = employee.EmployeeId,
+                        Attribute = a,
+                        AttributeValue = string.Empty
+                    }),
+                entityToViewModel: sea => new SpecificItemCharacteristicValueDTO
+                {
+                    CharacteristicId = sea.AttributeId,
+                    SpecificItemId = sea.SpecificEmployeeId,
+                    CharacteristicValue = sea.AttributeValue,
+                    CharacteristicName = sea.Attribute.AttributeName
+                },
+                viewModelToEntity: vm =>
+                {
+                    var existingEntity = dbContext.SpecificEmployeeAttributes.Local.FirstOrDefault(sea =>
+                                     sea.AttributeId == vm.CharacteristicId && sea.SpecificEmployeeId == vm.SpecificItemId);
+
+                    if (existingEntity != null)
+                    {
+                        existingEntity.AttributeValue = vm.CharacteristicValue;
+                        return existingEntity;
+                    }
+                    else
+                    {
+                        return new SpecificEmployeeAttribute
+                        {
+                            AttributeId = vm.CharacteristicId,
+                            SpecificEmployeeId = vm.SpecificItemId,
+                            AttributeValue = vm.CharacteristicValue,
+                            Attribute = allPossibleAttributes.First(a => a.EmployeeAttributeId == vm.CharacteristicId)
+                        };
+                    }
+                },
+                columns: columns,
+                columnControls: columnControls,
+                displayMember: nameof(SpecificItemCharacteristicValueDTO.CharacteristicName),
+                sortSelector: vm => vm.CharacteristicName,
+                label: "Изменение атрибутов сотрудника:",
+                addButtonText: "Добавить атрибут",
+                placeholderText: "Выберите атрибут",
+                onAdd: entity => dbContext.SpecificEmployeeAttributes.Add(entity),
+                onRemove: entity => dbContext.SpecificEmployeeAttributes.Remove(entity)
+            );
+        }
+        private void AddMasterOnObjectControl(Models.Object obj)
+        {
+            var allMasters = dbContext.Employees
+                .Include(e => e.EmplCategory)
+                .Where(e => e.EmplCategory.CategoryType == "Инженерно-технический персонал" && e.FireDate == null)
+                .ToList();
+
+            var columns = new Dictionary<string, string>
+            {
+                { "Имя мастера", nameof(ItemIdAndValueDTO.ItemId) }
+            };
+
+            var columnControls = new Dictionary<string, Func<ItemIdAndValueDTO, Control>>
+            {
+                { nameof(ItemIdAndValueDTO.ItemId), emv => new TextBlock { Text = emv.ValueString ?? string.Empty, VerticalAlignment = VerticalAlignment.Center } }
+            };
+
+            SetupCollectionEditor<Employee, ItemIdAndValueDTO>(
+                entityCollection: obj.MasterEmployees,
+                allPossibleItems: allMasters,
+                entityToViewModel: e => new ItemIdAndValueDTO
+                {
+                    ItemId = e.EmployeeId,
+                    ValueString = $"{e.Surname} {e.Name} {e.Patronymic ?? string.Empty}".Trim()
+                },
+                viewModelToEntity: vm => dbContext.Employees.First(e => e.EmployeeId == vm.ItemId),
+                columns: columns,
+                columnControls: columnControls,
+                displayMember: nameof(ItemIdAndValueDTO.ValueString),
+                sortSelector: vm => vm.ValueString,
+                label: "Добавление мастеров на объект:",
+                addButtonText: "Добавить мастера",
+                placeholderText: "Выберите сотрудника");
+        }
+        private void AddBrigadeCompositionControl(Brigade brigade)
+        {
+            var availableWorkers = dbContext.Employees
+                    .Include(e => e.EmplCategory)
+                    .Where(e => e.EmplCategory.CategoryType == "Рабочие" && e.FireDate == null &&
+                               !dbContext.Brigades.Any(b => b.BrigadeStatus == "active" && (b.Workers.Contains(e) || b.BrigadierId == e.EmployeeId)))
+                    .ToList();
+            var columns = new Dictionary<string, string>
+            {
+                { "Имя рабочего", nameof(ItemIdAndValueDTO.ItemId) }
+            };
+            var columnControls = new Dictionary<string, Func<ItemIdAndValueDTO, Control>>
+            {
+                { nameof(ItemIdAndValueDTO.ItemId), emv => new TextBlock { Text = emv.ValueString ?? string.Empty, VerticalAlignment = VerticalAlignment.Center } }
+            };
+            SetupCollectionEditor<Employee, ItemIdAndValueDTO>(
+                entityCollection: brigade.Workers,
+                allPossibleItems: availableWorkers,
+                entityToViewModel: e => new ItemIdAndValueDTO
+                {
+                    ItemId = e.EmployeeId,
+                    ValueString = $"{e.Surname} {e.Name} {e.Patronymic ?? string.Empty}".Trim()
+                },
+                viewModelToEntity: vm => dbContext.Employees.First(e => e.EmployeeId == vm.ItemId),
+                columns: columns,
+                columnControls: columnControls,
+                displayMember: nameof(ItemIdAndValueDTO.ValueString),
+                sortSelector: vm => vm.ValueString,
+                label: "Изменение состава бригады:",
+                addButtonText: "Добавить рабочего",
+                placeholderText: "Выберите рабочего");
+        }
+        private void AddSpecificObjectCharacteristicInObjectControls(Models.Object obj)
+        {
+            var allPossibleCharacteristic = dbContext.ObjectCharacteristics.ToList();
+
+            var currentCharacteristic = dbContext.SpecificObjectCharacteristics
+                .Where(soc => soc.SpecificObjectId == obj.ObjectId)
+                .Include(soc => soc.Characteristic)
+                .ToList();
+
+            var columns = new Dictionary<string, string>
+            {
+                { "Характеристика", nameof(SpecificItemCharacteristicValueDTO.CharacteristicName) },
+                { "Значение", nameof(SpecificItemCharacteristicValueDTO.CharacteristicValue) }
+            };
+
+            var columnControls = new Dictionary<string, Func<SpecificItemCharacteristicValueDTO, Control>>
+            {
+                { nameof(SpecificItemCharacteristicValueDTO.CharacteristicName), dto => new TextBlock { Text = dto.CharacteristicName, VerticalAlignment = VerticalAlignment.Center } },
+                { nameof(SpecificItemCharacteristicValueDTO.CharacteristicValue), dto => new TextBox{MaxLength = 255}
+                }
+            };
+
+            SetupCollectionEditor<SpecificObjectCharacteristic, SpecificItemCharacteristicValueDTO>(
+                entityCollection: new ObservableCollection<SpecificObjectCharacteristic>(currentCharacteristic),
+                allPossibleItems: allPossibleCharacteristic
+                    .Where(oc => !currentCharacteristic.Any(cc => cc.CharacteristicId == oc.ObjectCharacteristicId))
+                    .Select(oc => new SpecificObjectCharacteristic
+                    {
+                        CharacteristicId = oc.ObjectCharacteristicId,
+                        SpecificObjectId = obj.ObjectId,
+                        Characteristic = oc,
+                        CharacteristicValue = string.Empty
+                    }),
+                entityToViewModel: soc => new SpecificItemCharacteristicValueDTO
+                {
+                    CharacteristicId = soc.CharacteristicId,
+                    SpecificItemId = soc.SpecificObjectId,
+                    CharacteristicValue = soc.CharacteristicValue,
+                    CharacteristicName = soc.Characteristic.ObjCharacteristicName
+                },
+                viewModelToEntity: vm =>
+                {
+                    var existingEntity = dbContext.SpecificObjectCharacteristics.Local.FirstOrDefault(soc =>
+                        soc.CharacteristicId == vm.CharacteristicId && soc.SpecificObjectId == vm.SpecificItemId);
+
+                    if (existingEntity != null)
+                    {
+                        existingEntity.CharacteristicValue = vm.CharacteristicValue;
+                        return existingEntity;
+                    }
+                    else
+                    {
+                        return new SpecificObjectCharacteristic
+                        {
+                            CharacteristicId = vm.CharacteristicId,
+                            SpecificObjectId = vm.SpecificItemId,
+                            CharacteristicValue = vm.CharacteristicValue,
+                            Characteristic = allPossibleCharacteristic.First(oc => oc.ObjectCharacteristicId == vm.CharacteristicId)
+                        };
+                    }
+                },
+                columns: columns,
+                columnControls: columnControls,
+                displayMember: nameof(SpecificItemCharacteristicValueDTO.CharacteristicName),
+                sortSelector: vm => vm.CharacteristicName,
+                label: "Изменение характеристик объекта:",
+                addButtonText: "Добавить характеристику",
+                placeholderText: "Выберите характеристику",
+                onAdd: entity => dbContext.SpecificObjectCharacteristics.Add(entity),
+                onRemove: entity => dbContext.SpecificObjectCharacteristics.Remove(entity)
+            );
         }
     }
 }
