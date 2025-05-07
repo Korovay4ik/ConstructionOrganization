@@ -44,10 +44,10 @@ namespace constructionOrgManagement.ViewModels
             AddComboBoxControl("Статус объекта", nameof(Models.Object.ObjectStatus),
                 ["in_planning", "in_progress", "completed", "terminated"], "", obj.ObjectStatus);
 
-            //AddObjectEquipmentInObjectControl(obj);
-            AddMasterOnObjectControl(obj);
-            AddSpecificObjectCharacteristicInObjectControls(obj);
+            AddObjectEquipmentInObjectControls(obj);
             AddEstimateInObjectControls(obj);
+            AddSpecificObjectCharacteristicInObjectControls(obj);
+            AddMasterOnObjectControl(obj);
         }
         private void CreateObjectEquipmentControls()
         {
@@ -207,9 +207,11 @@ namespace constructionOrgManagement.ViewModels
 
         private void CreateObjectCategoryControls()
         {
-            if (OriginalEntity is not ObjectCategory) return;
+            if (OriginalEntity is not ObjectCategory oc) return;
 
             AddTextBoxControl("Название категории", nameof(ObjectCategory.ObjCategoryName), 50);
+
+            AddWorkTypeForCategoryInObjectCategoryControls(oc);
         }
 
         private void CreateEstimateControls()
@@ -294,6 +296,8 @@ namespace constructionOrgManagement.ViewModels
                                                 }).ToList().OrderBy(e => e.FullName);
             AddComboBoxControl("Начальник управления", nameof(ConstructionDepartment.DepartmentSupervisorId),
                 departSupervisors, "FullName", cd.DepartmentSupervisorId!, "EmployeeId");
+
+            AddDepartmentEquipmentInDepartmentControls(cd);
         }
 
         private void CreateBuildingMaterialControls()
@@ -561,6 +565,177 @@ namespace constructionOrgManagement.ViewModels
                 placeholderText: "Выберите характеристику",
                 onAdd: entity => dbContext.SpecificObjectCharacteristics.Add(entity),
                 onRemove: entity => dbContext.SpecificObjectCharacteristics.Remove(entity)
+            );
+        }
+        private void AddEstimateInObjectControls(Models.Object obj)
+        {
+            var allPossibleMaterial = dbContext.BuildingMaterials.ToList();
+
+            var currentEstimate = dbContext.Estimates
+                .Where(e => e.EstimateObjectId == obj.ObjectId)
+                .Include(e => e.Material)
+                .ToList();
+
+            var columns = new Dictionary<string, string>
+            {
+                { "Материал", nameof(EstimateDTO.MaterialName) },
+                { "Стоимость за единицу", nameof(EstimateDTO.UnitPrice) },
+                { "Планируемое количество", nameof(EstimateDTO.PlannedMaterialQuantity) },
+                { "Фактическое количество", nameof(EstimateDTO.ActualMaterialQuantity) }
+            };
+
+            var columnControls = new Dictionary<string, Func<EstimateDTO, Control>>
+            {
+                { nameof(EstimateDTO.MaterialName), dto => new TextBlock { Text = dto.MaterialName, VerticalAlignment = VerticalAlignment.Center } },
+                { nameof(EstimateDTO.UnitPrice), dto => new NumericUpDown
+                    {
+                        FormatString = "F2",
+                        Maximum = decimal.MaxValue,
+                        Minimum = 0
+                    }
+                },
+                { nameof(EstimateDTO.PlannedMaterialQuantity), dto => new NumericUpDown
+                    {
+                        FormatString = "F2",
+                        Maximum = decimal.MaxValue,
+                        Minimum = 0
+                    }
+                },
+                { nameof(EstimateDTO.ActualMaterialQuantity), dto => new NumericUpDown
+                    {
+                        FormatString = "F2",
+                        Maximum = decimal.MaxValue,
+                        Minimum = 0
+                    }
+                },
+            };
+
+            SetupCollectionEditor<Estimate, EstimateDTO>(
+                entityCollection: new ObservableCollection<Estimate>(currentEstimate),
+                allPossibleItems: allPossibleMaterial
+                    .Where(bm => !currentEstimate.Any(e => e.MaterialId == bm.BuildingMaterialId))
+                    .Select(bm => new Estimate
+                    {
+                        MaterialId = bm.BuildingMaterialId,
+                        EstimateObjectId = obj.ObjectId,
+                        PlannedMaterialQuantity = 0,
+                        ActualMaterialQuantity = null,
+                        UnitPrice = 0,
+                        Material = bm
+                    }),
+                entityToViewModel: e => new EstimateDTO
+                {
+                    MaterialId = e.MaterialId,
+                    EstimateObjectId = e.EstimateObjectId,
+                    MaterialName = e.Material.MaterialName,
+                    UnitPrice = e.UnitPrice,
+                    PlannedMaterialQuantity = e.PlannedMaterialQuantity,
+                    ActualMaterialQuantity = e.ActualMaterialQuantity
+                },
+                viewModelToEntity: dto =>
+                {
+                    var existingEntity = dbContext.Estimates.Local.FirstOrDefault(e =>
+                        e.MaterialId == dto.MaterialId && e.EstimateObjectId == dto.EstimateObjectId);
+
+                    if (existingEntity != null)
+                    {
+                        existingEntity.PlannedMaterialQuantity = dto.PlannedMaterialQuantity;
+                        existingEntity.ActualMaterialQuantity = dto.ActualMaterialQuantity;
+                        existingEntity.UnitPrice = dto.UnitPrice;
+                        return existingEntity;
+                    }
+                    else
+                    {
+                        return new Estimate
+                        {
+                            MaterialId = dto.MaterialId,
+                            EstimateObjectId = obj.ObjectId,
+                            PlannedMaterialQuantity = dto.PlannedMaterialQuantity,
+                            ActualMaterialQuantity = dto.ActualMaterialQuantity,
+                            UnitPrice = dto.UnitPrice,
+                            Material = allPossibleMaterial.First(bm => bm.BuildingMaterialId == dto.MaterialId)
+                        };
+                    }
+                },
+                columns: columns,
+                columnControls: columnControls,
+                displayMember: nameof(EstimateDTO.MaterialName),
+                sortSelector: dto => dto.MaterialName,
+                label: "Изменение сметы объекта:",
+                addButtonText: "Добавить материал",
+                placeholderText: "Выберите материал",
+                onAdd: entity => dbContext.Estimates.Add(entity),
+                onRemove: entity => dbContext.Estimates.Remove(entity)
+            );
+        }
+        private void AddWorkTypeForCategoryInObjectCategoryControls(ObjectCategory oc)
+        {
+            var allPossibleWorkType = dbContext.WorkTypes.ToList();
+
+            var currentWorkType = dbContext.WorkTypeForCategories
+                .Where(wtfc => wtfc.SpecificCategoryId == oc.ObjectCategoryId)
+                .Include(wtfc => wtfc.WtfcWorkType).ToList();
+
+            var columns = new Dictionary<string, string>
+            {
+                { "Вид работ", nameof(CategoryWorkTypeDTO.WorkTypeName) },
+                { "Выполняется обязательно", nameof(CategoryWorkTypeDTO.IsWorkTypeMandatory) }
+            };
+
+            var columnControls = new Dictionary<string, Func<CategoryWorkTypeDTO, Control>>
+            {
+                { nameof(CategoryWorkTypeDTO.WorkTypeName), dto => new TextBlock { Text = dto.WorkTypeName, VerticalAlignment = VerticalAlignment.Center } },
+                { nameof(CategoryWorkTypeDTO.IsWorkTypeMandatory), dto => new CheckBox { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center} },
+            };
+
+            SetupCollectionEditor<WorkTypeForCategory, CategoryWorkTypeDTO>(
+                entityCollection: new ObservableCollection<WorkTypeForCategory>(currentWorkType),
+                allPossibleItems: allPossibleWorkType
+                    .Where(wt => !currentWorkType.Any(wtfc => wtfc.WtfcWorkTypeId == wt.WorkTypeId))
+                    .Select(wt => new WorkTypeForCategory
+                    {
+                        SpecificCategoryId = oc.ObjectCategoryId,
+                        WtfcWorkTypeId = wt.WorkTypeId,
+                        IsMandatory = false,
+                        WtfcWorkType = wt
+                    }),
+                entityToViewModel: wtfc => new CategoryWorkTypeDTO
+                {
+                    SpecificCategoryId = wtfc.SpecificCategoryId,
+                    WorkTypeID = wtfc.WtfcWorkTypeId,
+                    IsWorkTypeMandatory = wtfc.IsMandatory ?? false,
+                    WorkTypeName = wtfc.WtfcWorkType.WorkTypeName
+                },
+                viewModelToEntity: dto =>
+                {
+                    var existingEntity = dbContext.WorkTypeForCategories.Local.FirstOrDefault(wtfc =>
+                        wtfc.WtfcWorkTypeId == dto.WorkTypeID && wtfc.SpecificCategoryId == dto.SpecificCategoryId);
+
+                    if (existingEntity != null)
+                    {
+                        existingEntity.IsMandatory = dto.IsWorkTypeMandatory;
+                        return existingEntity;
+                    }
+                    else
+                    {
+                        return new WorkTypeForCategory
+                        {
+                            SpecificCategoryId = dto.SpecificCategoryId,
+                            WtfcWorkTypeId = dto.WorkTypeID,
+                            IsMandatory = dto.IsWorkTypeMandatory,
+                            WtfcWorkType = allPossibleWorkType.First(wt => wt.WorkTypeId == dto.WorkTypeID)
+                        };
+                    }
+                },
+                columns: columns,
+                columnControls: columnControls,
+                displayMember: nameof(CategoryWorkTypeDTO.WorkTypeName),
+                sortSelector: dto => dto.WorkTypeName,
+                label: "Изменение видов работ для категории:",
+                addButtonText: "Добавить вид работ",
+                placeholderText: "Выберите вид работ",
+                onAdd: entity => dbContext.WorkTypeForCategories.Add(entity),
+                onRemove: entity => dbContext.WorkTypeForCategories.Remove(entity)
             );
         }
     }

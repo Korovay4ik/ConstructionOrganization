@@ -3,11 +3,12 @@
         xmlns:vm="using:constructionOrgManagement.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:animations="using:Avalonia.Animation"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="constructionOrgManagement.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="constructionOrgManagement">
+        Title="Информационная система строительной организации">
 
 	<Window.Resources>
 		<Thickness x:Key="defaultMargin">8</Thickness>
@@ -40,6 +41,9 @@
 						</Style>
 					</ToggleButton.Styles>
 				</ToggleButton>
+
+				<ToggleButton Content="🌓" Click="ToggleTheme_Click" HorizontalAlignment="Right" Margin="{StaticResource defaultMargin}"/>
+				
 			</StackPanel>
 		</SplitView.Pane>
 		<ContentControl Content="{Binding ContentSwitcher}"></ContentControl>

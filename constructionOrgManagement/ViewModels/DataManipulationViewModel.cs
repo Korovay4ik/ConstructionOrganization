@@ -202,10 +202,12 @@ namespace constructionOrgManagement.ViewModels
                 dbContext.Entry(originalEntity).Collection("MasterEmployees").Load();
                 dbContext.Entry(originalEntity).Collection("SpecificObjectCharacteristics").Load();
                 dbContext.Entry(originalEntity).Collection("Estimates").Load();
+                dbContext.Entry(originalEntity).Collection("ObjectEquipments").Load();
             }
             else if (originalEntity is Brigade) dbContext.Entry(originalEntity).Collection("Workers").Load();
             else if (originalEntity is Employee) dbContext.Entry(originalEntity).Collection("SpecificEmployeeAttributes").Load(); 
-            //dbContext.Entry(originalEntity!).Collection("ObjectEquipments").Load();
+            else if (originalEntity is ObjectCategory) dbContext.Entry(originalEntity).Collection("WorkTypeForCategories").Load(); 
+            else if (originalEntity is ConstructionDepartment) dbContext.Entry(originalEntity).Collection("DepartmentEquipments").Load();
 
             if (originalEntity == null) return;
 
