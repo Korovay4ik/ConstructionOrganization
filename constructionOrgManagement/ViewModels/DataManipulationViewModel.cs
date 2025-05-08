@@ -1,6 +1,4 @@
 ﻿using Avalonia.Controls;
-using Avalonia.Data;
-using Avalonia.Notification;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -20,6 +18,7 @@ namespace constructionOrgManagement.ViewModels
     public partial class DataManipulationViewModel : ViewModelBase
     {
         private string? _selectedTable;
+        private static ConstructionOrganizationContext? _dbContext;
 
         [ObservableProperty] private List<string>? _availableTables;
 
@@ -87,7 +86,7 @@ namespace constructionOrgManagement.ViewModels
             if (!string.IsNullOrWhiteSpace(FilterText)) OnFilterTextChanged(FilterText);
         }
 
-        public DataManipulationViewModel()
+        public DataManipulationViewModel(ConstructionOrganizationContext dbContext)
         {
             AvailableTables =
             [
@@ -115,17 +114,19 @@ namespace constructionOrgManagement.ViewModels
                 "WorkType",
                 "WorkTypeForCategory"
             ];
+            _dbContext = dbContext;
         }
         private List<object>? GetEnhancedData(string? tableName)
         {
+            if (_dbContext == null) return [];
             try
             {
                 if (string.IsNullOrEmpty(tableName)) return [];
 
-                var dbSetProperty = dbContext.GetType().GetProperty(tableName + "s") ?? dbContext.GetType().GetProperty(tableName[..^1] + "ies");
+                var dbSetProperty = _dbContext.GetType().GetProperty(tableName + "s") ?? _dbContext.GetType().GetProperty(tableName[..^1] + "ies");
                 if (dbSetProperty == null) return null;
 
-                if (dbSetProperty.GetValue(dbContext) is not IEnumerable<object> dbSet) return null;
+                if (dbSetProperty.GetValue(_dbContext) is not IEnumerable<object> dbSet) return null;
 
                 var items = dbSet.ToList();
                 if (items.Count == 0) return [];
@@ -194,20 +195,20 @@ namespace constructionOrgManagement.ViewModels
         [RelayCommand]
         private void Edit(object selectedItem)
         {
-            if (selectedItem == null) return;
+            if (selectedItem == null || _dbContext == null) return;
 
             var originalEntity = FindOriginalEntity(selectedItem, GetEntityType(SelectedTable));
             if (originalEntity is Models.Object)
             {
-                dbContext.Entry(originalEntity).Collection("MasterEmployees").Load();
-                dbContext.Entry(originalEntity).Collection("SpecificObjectCharacteristics").Load();
-                dbContext.Entry(originalEntity).Collection("Estimates").Load();
-                dbContext.Entry(originalEntity).Collection("ObjectEquipments").Load();
+                _dbContext.Entry(originalEntity).Collection("MasterEmployees").Load();
+                _dbContext.Entry(originalEntity).Collection("SpecificObjectCharacteristics").Load();
+                _dbContext.Entry(originalEntity).Collection("Estimates").Load();
+                _dbContext.Entry(originalEntity).Collection("ObjectEquipments").Load();
             }
-            else if (originalEntity is Brigade) dbContext.Entry(originalEntity).Collection("Workers").Load();
-            else if (originalEntity is Employee) dbContext.Entry(originalEntity).Collection("SpecificEmployeeAttributes").Load(); 
-            else if (originalEntity is ObjectCategory) dbContext.Entry(originalEntity).Collection("WorkTypeForCategories").Load(); 
-            else if (originalEntity is ConstructionDepartment) dbContext.Entry(originalEntity).Collection("DepartmentEquipments").Load();
+            else if (originalEntity is Brigade) _dbContext.Entry(originalEntity).Collection("Workers").Load();
+            else if (originalEntity is Employee) _dbContext.Entry(originalEntity).Collection("SpecificEmployeeAttributes").Load(); 
+            else if (originalEntity is ObjectCategory) _dbContext.Entry(originalEntity).Collection("WorkTypeForCategories").Load(); 
+            else if (originalEntity is ConstructionDepartment) _dbContext.Entry(originalEntity).Collection("DepartmentEquipments").Load();
 
             if (originalEntity == null) return;
 
@@ -249,6 +250,7 @@ namespace constructionOrgManagement.ViewModels
         [RelayCommand]
         private async Task Delete(object selectedItem)
         {
+            if (_dbContext == null) return;
             if (selectedItem == null || string.IsNullOrEmpty(SelectedTable))
             {
                 _currentNotification = CreateNotification("Ошибка", "Не выбран объект для удаления", NotificationManager, _currentNotification);
@@ -280,8 +282,8 @@ namespace constructionOrgManagement.ViewModels
                 if (!await ShowConfirmationDialog("Подтверждение удаления",
                     $"Вы уверены, что хотите удалить\nэтот объект из таблицы {SelectedTable}?")) return;
 
-                dbContext.Remove(originalEntity);
-                await dbContext.SaveChangesAsync();
+                _dbContext.Remove(originalEntity);
+                await _dbContext.SaveChangesAsync();
 
                 RefreshData();
                 _currentNotification = CreateNotification("Успех", "Объект успешно удален", NotificationManager, _currentNotification);
@@ -313,16 +315,18 @@ namespace constructionOrgManagement.ViewModels
         }
         private static Type? GetEntityType(string? tableName)
         {
-            return dbContext.Model.GetEntityTypes().FirstOrDefault(e => e.ClrType.Name == tableName ||
+            if (_dbContext == null) return null;
+            return _dbContext.Model.GetEntityTypes().FirstOrDefault(e => e.ClrType.Name == tableName ||
                                                                         e.ClrType.Name + "s" == tableName ||
                                                                         e.ClrType.Name[..^1] + "ies" == tableName ||
                                                                         e.GetTableName() == tableName)?.ClrType;
         }
         private static object? FindOriginalEntity(object gridItem, Type? entityType)
         {
+            if (_dbContext == null) return null;
             var entity = Activator.CreateInstance(entityType!);
             if (entity == null) return null;
-            var primaryKey = dbContext.Model.FindEntityType(entityType!)?.FindPrimaryKey();
+            var primaryKey = _dbContext.Model.FindEntityType(entityType!)?.FindPrimaryKey();
             if (primaryKey == null) return null;
 
             foreach (var property in primaryKey.Properties)
@@ -334,14 +338,16 @@ namespace constructionOrgManagement.ViewModels
                 entity.GetType().GetProperty(property.Name)?.SetValue(entity, value);
             }
 
-            return dbContext.Find(entityType!, [.. primaryKey.Properties.Select(p => entity.GetType().GetProperty(p.Name)?.GetValue(entity))]);
+            return _dbContext.Find(entityType!, [.. primaryKey.Properties.Select(p => entity.GetType().GetProperty(p.Name)?.GetValue(entity))]);
         }
         private static async Task<List<string>> CheckRestrictConstraintsAsync(object entity, Type entityType)
         {
-            var errors = new List<string>();
-            var entityEntry = dbContext.Entry(entity);
+            if (_dbContext == null) return [];
 
-            var entityMetadata = dbContext.Model.FindEntityType(entityType)!;
+            var errors = new List<string>();
+            var entityEntry = _dbContext.Entry(entity);
+
+            var entityMetadata = _dbContext.Model.FindEntityType(entityType)!;
 
             foreach (var navigation in entityMetadata.GetNavigations())
             {

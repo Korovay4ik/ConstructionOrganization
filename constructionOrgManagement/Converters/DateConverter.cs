@@ -4,31 +4,89 @@ using System.Globalization;
 
 namespace constructionOrgManagement.Converters
 {
-    class DateConverter : IValueConverter
+    public class DateConverter : IValueConverter
     {
+        private static readonly DateTimeOffset _minValidDateTimeOffset;
+
+        static DateConverter()
+        {
+            try
+            {
+                _minValidDateTimeOffset = new DateTimeOffset(new DateTime(1, 1, 1), TimeSpan.Zero);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                _minValidDateTimeOffset = DateTimeOffset.MinValue;
+            }
+        }
+
         public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            if (value is DateOnly dateOnly)
-                return new DateTimeOffset(new DateTime(dateOnly.Year, dateOnly.Month, dateOnly.Day));
+            try
+            {
+                return value switch
+                {
+                    DateOnly dateOnly => dateOnly == DateOnly.MinValue
+                        ? _minValidDateTimeOffset
+                        : new DateTimeOffset(dateOnly.ToDateTime(TimeOnly.MinValue)),
 
-            if (value is null)
-                return null;
+                    DateTime dateTime => dateTime == DateTime.MinValue
+                        ? _minValidDateTimeOffset
+                        : new DateTimeOffset(dateTime),
 
-            throw new NotSupportedException();
+                    DateTimeOffset dto => dto,
+                    null => null,
+                    _ => throw new ArgumentException($"Неподдерживаемый тип: {value?.GetType()}")
+                };
+            }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка конвертации даты: {ex.Message}");
+                return _minValidDateTimeOffset;
+            }
         }
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            if (value is DateTime dateTime)
-                return DateOnly.FromDateTime(dateTime);
+            if (value == null) return null;
 
-            if (value is DateTimeOffset dateTimeOffset)
-                return DateOnly.FromDateTime(dateTimeOffset.DateTime);
+            try
+            {
+                if (value is DateTimeOffset dto)
+                {
+                    if (dto == _minValidDateTimeOffset)
+                    {
+                        return targetType switch
+                        {
+                            Type t when t == typeof(DateOnly) => DateOnly.MinValue,
+                            Type t when t == typeof(DateOnly?) => (DateOnly?)DateOnly.MinValue,
+                            Type t when t == typeof(DateTime) => DateTime.MinValue,
+                            Type t when t == typeof(DateTime?) => (DateTime?)DateTime.MinValue,
+                            Type t when t == typeof(DateTimeOffset) => _minValidDateTimeOffset,
+                            Type t when t == typeof(DateTimeOffset?) => (DateTimeOffset?)_minValidDateTimeOffset,
+                            _ => throw new ArgumentException($"Неподдерживаемый целевой тип: {targetType}")
+                        };
+                    }
 
-            if (value is null)
+                    return targetType switch
+                    {
+                        Type t when t == typeof(DateOnly) => DateOnly.FromDateTime(dto.DateTime),
+                        Type t when t == typeof(DateOnly?) => (DateOnly?)DateOnly.FromDateTime(dto.DateTime),
+                        Type t when t == typeof(DateTime) => dto.DateTime,
+                        Type t when t == typeof(DateTime?) => (DateTime?)dto.DateTime,
+                        Type t when t == typeof(DateTimeOffset) => dto,
+                        Type t when t == typeof(DateTimeOffset?) => (DateTimeOffset?)dto,
+                        _ => throw new ArgumentException($"Неподдерживаемый целевой тип: {targetType}")
+                    };
+                }
+
+                throw new ArgumentException($"Неподдерживаемый тип: {value.GetType()}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка обратной конвертации: {ex.Message}");
                 return null;
-
-            throw new NotSupportedException();
+            }
         }
     }
 }

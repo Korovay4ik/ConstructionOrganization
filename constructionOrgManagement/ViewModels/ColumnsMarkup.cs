@@ -10,6 +10,7 @@ namespace constructionOrgManagement.ViewModels
     {
         private static List<object> GetEmployeeData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
 
             foreach (var item in items.Cast<Employee>())
@@ -20,7 +21,7 @@ namespace constructionOrgManagement.ViewModels
                     Имя = item.Name,
                     Фамилия = item.Surname,
                     Отчество = item.Patronymic,
-                    Должность = dbContext.EmployeeCategories.FirstOrDefault(c => c.EmployeeCategoryId == item.EmplCategoryId)?.EmplCategoryName,
+                    Должность = _dbContext.EmployeeCategories.FirstOrDefault(c => c.EmployeeCategoryId == item.EmplCategoryId)?.EmplCategoryName,
                     Образование = item.Education,
                     Телефон = item.ContactNumber,
                     Дата_приема = item.HireDate,
@@ -32,11 +33,12 @@ namespace constructionOrgManagement.ViewModels
 
         private static List<object> GetBrigadeData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
 
             foreach (var item in items.Cast<Brigade>())
             {
-                var brigadier = dbContext.Employees.FirstOrDefault(e => e.EmployeeId == item.BrigadierId);
+                var brigadier = _dbContext.Employees.FirstOrDefault(e => e.EmployeeId == item.BrigadierId);
                 var brigadierName = brigadier != null
                     ? $"{brigadier.Surname} {brigadier.Name} {brigadier.Patronymic}"
                     : null;
@@ -53,6 +55,7 @@ namespace constructionOrgManagement.ViewModels
         }
         private static List<object> GetContractData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
 
             foreach (var item in items.Cast<Contract>())
@@ -61,7 +64,7 @@ namespace constructionOrgManagement.ViewModels
                 {
                     item.ContractId,
                     Название = item.ContractName,
-                    Клиент = dbContext.Customers.FirstOrDefault(c => c.CustomerId == item.ContractCustomerId)?.CustomerName,
+                    Клиент = _dbContext.Customers.FirstOrDefault(c => c.CustomerId == item.ContractCustomerId)?.CustomerName,
                     Сумма_сделки = item.TotalAmount,
                     Статус_контракта = item.ContractStatus
                 });
@@ -71,20 +74,21 @@ namespace constructionOrgManagement.ViewModels
 
         private static List<object> GetObjectData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
 
             foreach (var item in items.Cast<constructionOrgManagement.Models.Object>())
             {
-                var foreman = dbContext.Employees.FirstOrDefault(e => e.EmployeeId == item.ForemanId);
+                var foreman = _dbContext.Employees.FirstOrDefault(e => e.EmployeeId == item.ForemanId);
                 enhancedItems.Add(new
                 {
                     item.ObjectId,
                     Название = item.ObjectName,
                     Прораб = GetFullName(foreman),
                     Адрес = item.ObjectLocation,
-                    Участок = dbContext.Sites.FirstOrDefault(s => s.SiteId == item.ObjectSiteId)?.SiteName,
-                    По_контракту = dbContext.Contracts.FirstOrDefault(c => c.ContractId == item.ObjectContractId)?.ContractName,
-                    Категория = dbContext.ObjectCategories.FirstOrDefault(oc => oc.ObjectCategoryId == item.CategoryId)?.ObjCategoryName,
+                    Участок = _dbContext.Sites.FirstOrDefault(s => s.SiteId == item.ObjectSiteId)?.SiteName,
+                    По_контракту = _dbContext.Contracts.FirstOrDefault(c => c.ContractId == item.ObjectContractId)?.ContractName,
+                    Категория = _dbContext.ObjectCategories.FirstOrDefault(oc => oc.ObjectCategoryId == item.CategoryId)?.ObjCategoryName,
                     Статус = item.ObjectStatus
                 });
             }
@@ -92,29 +96,31 @@ namespace constructionOrgManagement.ViewModels
         }
         private static List<object> GetSiteData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
 
             foreach (var item in items.Cast<Site>())
             {
-                var siteSupervisor = dbContext.Employees.FirstOrDefault(e => e.EmployeeId == item.SiteSupervisorId);
+                var siteSupervisor = _dbContext.Employees.FirstOrDefault(e => e.EmployeeId == item.SiteSupervisorId);
                 enhancedItems.Add(new
                 {
                     item.SiteId,
                     Название = item.SiteName,
                     Начальник_участка = GetFullName(siteSupervisor),
                     Адрес = item.SiteLocation,
-                    Строительное_управление = dbContext.ConstructionDepartments.FirstOrDefault(cd => cd.ConstructionDepartmentId == item.SiteDepartmentId)?.DepartmentName
+                    Строительное_управление = _dbContext.ConstructionDepartments.FirstOrDefault(cd => cd.ConstructionDepartmentId == item.SiteDepartmentId)?.DepartmentName
                 });
             }
             return enhancedItems;
         }
         private static List<object> GetConstructionDepartmentData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
 
             foreach (var item in items.Cast<ConstructionDepartment>())
             {
-                var departSupervisor = dbContext.Employees.FirstOrDefault(e => e.EmployeeId == item.DepartmentSupervisorId);
+                var departSupervisor = _dbContext.Employees.FirstOrDefault(e => e.EmployeeId == item.DepartmentSupervisorId);
                 enhancedItems.Add(new
                 {
                     item.ConstructionDepartmentId,
@@ -171,6 +177,7 @@ namespace constructionOrgManagement.ViewModels
         }
         private static List<object> GetDepartmentEquipmentData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
 
             foreach (var item in items.Cast<DepartmentEquipment>())
@@ -178,8 +185,8 @@ namespace constructionOrgManagement.ViewModels
                 enhancedItems.Add(new
                 {
                     item.DepartmentEquipmentId,
-                    Название_техники = dbContext.OrganizationEquipments.FirstOrDefault(oe => oe.OrganizationEquipmentId == item.OrgEquipmentId)?.EquipmentName,
-                    Выделено_управлению = dbContext.ConstructionDepartments.FirstOrDefault(cd => cd.ConstructionDepartmentId == item.DepartmentId)?.DepartmentName,
+                    Название_техники = _dbContext.OrganizationEquipments.FirstOrDefault(oe => oe.OrganizationEquipmentId == item.OrgEquipmentId)?.EquipmentName,
+                    Выделено_управлению = _dbContext.ConstructionDepartments.FirstOrDefault(cd => cd.ConstructionDepartmentId == item.DepartmentId)?.DepartmentName,
                     Выделенное_количество = item.DepartEquipmentQuantity
                 });
             }
@@ -216,6 +223,7 @@ namespace constructionOrgManagement.ViewModels
         }
         private static List<object> GetEstimateData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
             foreach (var item in items.Cast<Estimate>())
             {
@@ -223,8 +231,8 @@ namespace constructionOrgManagement.ViewModels
                 {
                     item.MaterialId,
                     item.EstimateObjectId,
-                    Материал = dbContext.BuildingMaterials.FirstOrDefault(bm => bm.BuildingMaterialId == item.MaterialId)?.MaterialName,
-                    Закуплено_на_объект = dbContext.Objects.FirstOrDefault(o => o.ObjectId == item.EstimateObjectId)?.ObjectName,
+                    Материал = _dbContext.BuildingMaterials.FirstOrDefault(bm => bm.BuildingMaterialId == item.MaterialId)?.MaterialName,
+                    Закуплено_на_объект = _dbContext.Objects.FirstOrDefault(o => o.ObjectId == item.EstimateObjectId)?.ObjectName,
                     Планируемое_количество = item.PlannedMaterialQuantity,
                     Цена_за_единицу = item.UnitPrice,
                     Фактическое_количество = item.ActualMaterialQuantity
@@ -260,6 +268,7 @@ namespace constructionOrgManagement.ViewModels
         }
         private static List<object> GetObjectEquipmentData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
 
             foreach (var item in items.Cast<ObjectEquipment>())
@@ -268,8 +277,8 @@ namespace constructionOrgManagement.ViewModels
                 {
                     item.EquipmentId,
                     item.EquipmentForObjectId,
-                    Объект = dbContext.Objects.FirstOrDefault(o => o.ObjectId == item.EquipmentForObjectId)?.ObjectName,
-                    Название = dbContext.DepartmentEquipments
+                    Объект = _dbContext.Objects.FirstOrDefault(o => o.ObjectId == item.EquipmentForObjectId)?.ObjectName,
+                    Название = _dbContext.DepartmentEquipments
                                        .Include(de => de.OrgEquipment)
                                        .FirstOrDefault(de => de.DepartmentEquipmentId == item.EquipmentId)?.OrgEquipment?
                                        .EquipmentName,
@@ -282,16 +291,17 @@ namespace constructionOrgManagement.ViewModels
         }
         private static List<object> GetSpecificEmployeeAttributeData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
             foreach (var item in items.Cast<SpecificEmployeeAttribute>())
             {
-                var employee = dbContext.Employees.FirstOrDefault(e => e.EmployeeId == item.SpecificEmployeeId);
+                var employee = _dbContext.Employees.FirstOrDefault(e => e.EmployeeId == item.SpecificEmployeeId);
                 enhancedItems.Add(new
                 {
                     item.AttributeId,
                     item.SpecificEmployeeId,
                     Сотрудник = GetFullName(employee),
-                    Атрибут = dbContext.EmployeeAttributes.FirstOrDefault(ea => ea.EmployeeAttributeId == item.AttributeId)?.AttributeName,
+                    Атрибут = _dbContext.EmployeeAttributes.FirstOrDefault(ea => ea.EmployeeAttributeId == item.AttributeId)?.AttributeName,
                     Значение = item.AttributeValue
                 });
             }
@@ -299,6 +309,7 @@ namespace constructionOrgManagement.ViewModels
         }
         private static List<object> GetSpecificObjectCharacteristicData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
             foreach (var item in items.Cast<SpecificObjectCharacteristic>())
             {
@@ -306,8 +317,8 @@ namespace constructionOrgManagement.ViewModels
                 {
                     item.SpecificObjectId,
                     item.CharacteristicId,
-                    Объект = dbContext.Objects.FirstOrDefault(o => o.ObjectId == item.SpecificObjectId)?.ObjectName,
-                    Характеристика = dbContext.ObjectCharacteristics.FirstOrDefault(oc => oc.ObjectCharacteristicId == item.CharacteristicId)?.ObjCharacteristicName,
+                    Объект = _dbContext.Objects.FirstOrDefault(o => o.ObjectId == item.SpecificObjectId)?.ObjectName,
+                    Характеристика = _dbContext.ObjectCharacteristics.FirstOrDefault(oc => oc.ObjectCharacteristicId == item.CharacteristicId)?.ObjCharacteristicName,
                     Значение = item.CharacteristicValue
                 });
             }
@@ -315,15 +326,16 @@ namespace constructionOrgManagement.ViewModels
         }
         private static List<object> GetWorkScheduleData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
             foreach (var item in items.Cast<WorkSchedule>())
             {
                 enhancedItems.Add(new
                 {
                     item.ScheduleId,
-                    Объект = dbContext.Objects.FirstOrDefault(o => o.ObjectId == item.ScheduleObjectId)?.ObjectName,
-                    Бригада = dbContext.Brigades.FirstOrDefault(b => b.BrigadeId == item.ScheduleBrigadeId)?.BrigadeName,
-                    Тип_работ = dbContext.WorkTypes.FirstOrDefault(wt => wt.WorkTypeId == item.ScheduleWorkTypeId)?.WorkTypeName,
+                    Объект = _dbContext.Objects.FirstOrDefault(o => o.ObjectId == item.ScheduleObjectId)?.ObjectName,
+                    Бригада = _dbContext.Brigades.FirstOrDefault(b => b.BrigadeId == item.ScheduleBrigadeId)?.BrigadeName,
+                    Тип_работ = _dbContext.WorkTypes.FirstOrDefault(wt => wt.WorkTypeId == item.ScheduleWorkTypeId)?.WorkTypeName,
                     Плановая_дата_начала = item.PlannedStartDate,
                     Плановая_дата_конца = item.PlannedEndDate,
                     Фактическая_дата_начала = item.ActualStartDate,
@@ -348,6 +360,7 @@ namespace constructionOrgManagement.ViewModels
         }
         private static List<object> GetWorkTypeForCategoryData(List<object> items)
         {
+            if (_dbContext == null) return [];
             var enhancedItems = new List<object>();
             foreach (var item in items.Cast<WorkTypeForCategory>())
             {
@@ -355,8 +368,8 @@ namespace constructionOrgManagement.ViewModels
                 {
                     item.WtfcWorkTypeId,
                     item.SpecificCategoryId,
-                    Категория_объекта = dbContext.ObjectCategories.FirstOrDefault(oc => oc.ObjectCategoryId == item.SpecificCategoryId)?.ObjCategoryName,
-                    Тип_работы = dbContext.WorkTypes.FirstOrDefault(wt => wt.WorkTypeId == item.WtfcWorkTypeId)?.WorkTypeName,
+                    Категория_объекта = _dbContext.ObjectCategories.FirstOrDefault(oc => oc.ObjectCategoryId == item.SpecificCategoryId)?.ObjCategoryName,
+                    Тип_работы = _dbContext.WorkTypes.FirstOrDefault(wt => wt.WorkTypeId == item.WtfcWorkTypeId)?.WorkTypeName,
                     Обязательно = item.IsMandatory
                 });
             }

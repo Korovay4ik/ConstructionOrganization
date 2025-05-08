@@ -3,50 +3,116 @@
         xmlns:vm="using:constructionOrgManagement.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-		xmlns:animations="using:Avalonia.Animation"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="constructionOrgManagement.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Title="Информационная система строительной организации">
 
-	<Window.Resources>
-		<Thickness x:Key="defaultMargin">8</Thickness>
-	</Window.Resources>
+	<Window.Styles>
+		<Style Selector="Button.menu-button">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="BorderBrush" Value="Transparent"/>
+			<Setter Property="HorizontalContentAlignment" Value="Left"/>
+			<Setter Property="HorizontalAlignment" Value="Stretch"/>
+			<Setter Property="Padding" Value="10 5"/>
+			<Setter Property="Margin" Value="5 2"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
 
-    <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
-        <vm:MainWindowViewModel/>
-    </Design.DataContext>
-	
-	<SplitView IsPaneOpen="{Binding #btnOpenMenu.IsChecked}" 
-			   DisplayMode="CompactInline" 
-			   PanePlacement="Left" 
-			   OpenPaneLength="200" 
-			   CompactPaneLength="50">
-		<SplitView.Pane>
-			<StackPanel>
-				<TextBlock HorizontalAlignment="Center" Margin="{StaticResource defaultMargin}">Меню</TextBlock>
-				<Button HorizontalAlignment="Stretch" Margin="{StaticResource defaultMargin}">Информация</Button>
-				<Button HorizontalAlignment="Stretch" Margin="{StaticResource defaultMargin}">Запросы</Button>
-				<Button HorizontalAlignment="Stretch" Margin="{StaticResource defaultMargin}" Command="{Binding SwitchContent}" CommandParameter="{x:Type vm:DataManipulationViewModel}">Просмотр записей</Button>
-			    <ToggleButton Name="btnOpenMenu" HorizontalAlignment="Right" Margin="{StaticResource defaultMargin}">
-					<ToggleButton.Styles>
-						<Style Selector="ToggleButton[IsChecked=true] /template/ ContentPresenter">
-							<Setter Property="Content" Value="&lt;"/>
-						</Style>
-						<Style Selector="ToggleButton[IsChecked=false] /template/ ContentPresenter">
-							<Setter Property="Content" Value="&gt;"/>
-						</Style>
-					</ToggleButton.Styles>
-				</ToggleButton>
+		<Style Selector="Button.danger-button">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="BorderBrush" Value="Transparent"/>
+			<Setter Property="Foreground" Value="#d32f2f"/>
+			<Setter Property="HorizontalContentAlignment" Value="Left"/>
+			<Setter Property="Padding" Value="10 5"/>
+			<Setter Property="Margin" Value="5 10 5 5"/>
+			<Setter Property="Cursor" Value="Hand"/>
+		</Style>
 
-				<ToggleButton Content="🌓" Click="ToggleTheme_Click" HorizontalAlignment="Right" Margin="{StaticResource defaultMargin}"/>
-				
-			</StackPanel>
-		</SplitView.Pane>
-		<ContentControl Content="{Binding ContentSwitcher}"></ContentControl>
-	</SplitView>
+		<Style Selector="Border.menu-header">
+			<Setter Property="Background" Value="#3a3a3a"/>
+			<Setter Property="Padding" Value="5 5"/>
+		</Style>
+	</Window.Styles>
+
+	<Grid>
+		<SplitView IsPaneOpen="{Binding #btnOpenMenu.IsChecked}"
+                   DisplayMode="CompactInline"
+                   PanePlacement="Left"
+                   OpenPaneLength="220"
+                   CompactPaneLength="50"
+                   IsVisible="{Binding IsMenuVisible}">
+
+			<SplitView.Pane>
+				<Grid>
+					<Grid.RowDefinitions>
+						<RowDefinition Height="Auto"/>
+						<RowDefinition Height="*"/>
+						<RowDefinition Height="Auto"/>
+					</Grid.RowDefinitions>
+
+					<Border Grid.Row="0" Classes="menu-header">
+						<TextBlock Text="Меню системы"
+                                   HorizontalAlignment="Center"
+                                   Foreground="White"
+                                   FontWeight="Bold"/>
+					</Border>
+
+					<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+						<StackPanel>
+							<Button Classes="menu-button">
+								<TextBlock Text="🏠 Главная"/>
+							</Button>
+
+							<Button Classes="menu-button"
+                                    Command="{Binding SwitchContent}"
+                                    CommandParameter="{x:Type vm:DataManipulationViewModel}">
+								<TextBlock Text="📊 Просмотр записей"/>
+							</Button>
+
+							<Button Classes="menu-button">
+								<TextBlock Text="ℹ️ Информация"/>
+							</Button>
+
+							<Button Classes="menu-button">
+								<TextBlock Text="🔍 Запросы"/>
+							</Button>
+						</StackPanel>
+					</ScrollViewer>
+
+					<StackPanel Grid.Row="2" Spacing="5">
+						<Button Classes="menu-button"
+                                Click="ToggleTheme_Click"
+                                Content="🌓 Сменить тему"/>
+
+						<Button Classes="danger-button"
+                                Command="{Binding LogoutCommand}"
+                                Content="👋 Сменить пользователя"/>
+
+						<ToggleButton Name="btnOpenMenu"
+									  Classes="menu-button"
+									  HorizontalAlignment="Stretch"
+									  HorizontalContentAlignment="Center">
+							<ToggleButton.Styles>
+								<Style Selector="ToggleButton[IsChecked=true] /template/ ContentPresenter">
+									<Setter Property="Content" Value="◀️ Свернуть меню"/>
+								</Style>
+								<Style Selector="ToggleButton[IsChecked=false] /template/ ContentPresenter">
+									<Setter Property="Content" Value="▶️"/>
+								</Style>
+							</ToggleButton.Styles>
+						</ToggleButton>
+						
+					</StackPanel>
+				</Grid>
+			</SplitView.Pane>
+
+			<ContentControl Content="{Binding ContentSwitcher}"/>
+		</SplitView>
+
+		<ContentControl Content="{Binding ContentSwitcher}"
+                       IsVisible="{Binding !IsMenuVisible}"/>
+	</Grid>
 
 </Window>

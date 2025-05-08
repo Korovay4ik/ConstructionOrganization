@@ -21,12 +21,13 @@ using System.Threading.Tasks;
 
 namespace constructionOrgManagement.ViewModels
 {
-    public partial class DataEditViewModel : ViewModelBase
+    public partial class DataEditViewModel(ConstructionOrganizationContext dbContext) : ViewModelBase
     {
         [ObservableProperty] private string? _selectedTable;
         [ObservableProperty] private object? _originalEntity;
 
         [ObservableProperty] private List<Control> _editControls = [];
+        private readonly ConstructionOrganizationContext? _dbContext = dbContext;
 
         private class CollectionEditState(
             object originalCollection,
@@ -55,18 +56,18 @@ namespace constructionOrgManagement.ViewModels
         [RelayCommand]
         private async Task Save()
         {
-            if (OriginalEntity == null) return;
+            if (OriginalEntity == null || _dbContext == null) return;
 
-            using var transaction = await dbContext.Database.BeginTransactionAsync();
+            using var transaction = await _dbContext.Database.BeginTransactionAsync();
             try
             {
                 if (DataManipulationMode == ManipulationMode.Add)
                 {
-                    dbContext.Add(OriginalEntity);
+                    _dbContext.Add(OriginalEntity);
                 }
                 _currentCollectionEditState.ForEach(es => es?.ApplyChanges?.Invoke());
 
-                await dbContext.SaveChangesAsync();
+                await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
 
                 _currentCollectionEditState?.Clear();
@@ -83,9 +84,10 @@ namespace constructionOrgManagement.ViewModels
         [RelayCommand]
         private void Cancel()
         {
+            if (_dbContext == null) return;
             _currentCollectionEditState.ForEach(es => es?.RevertChanges?.Invoke());
 
-            if (OriginalEntity != null) dbContext.Entry(OriginalEntity).State = EntityState.Detached;
+            if (OriginalEntity != null) _dbContext.Entry(OriginalEntity).State = EntityState.Detached;
 
             _currentCollectionEditState?.Clear();
 
@@ -174,204 +176,6 @@ namespace constructionOrgManagement.ViewModels
                 default:
                     break;
             }
-        }
-        private void AddDepartmentEquipmentInDepartmentControls(ConstructionDepartment department)
-        {
-            var allPossibleEquipment = dbContext.OrganizationEquipments.ToList();
-
-            var currentEquipment = dbContext.DepartmentEquipments
-                .Where(de => de.DepartmentId == department.ConstructionDepartmentId)
-                .Include(de => de.OrgEquipment).ToList();
-
-            var columns = new Dictionary<string, string>
-            {
-                { "Оборудование", nameof(DepartmentEquipmentDTO.EquipmentName) },
-                { "Количество", nameof(DepartmentEquipmentDTO.DepartEquipmentQuantity) }
-            };
-
-            var columnControls = new Dictionary<string, Func<DepartmentEquipmentDTO, Control>>
-            {
-                { nameof(DepartmentEquipmentDTO.EquipmentName), dto => new TextBlock { Text = dto.EquipmentName, VerticalAlignment = VerticalAlignment.Center } },
-                { nameof(DepartmentEquipmentDTO.DepartEquipmentQuantity), dto => new NumericUpDown 
-                { 
-                    VerticalAlignment = VerticalAlignment.Center, 
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Minimum = 0,
-                    Maximum = int.MaxValue,
-                    FormatString = "F0"
-                } },
-            };
-
-            SetupCollectionEditor<DepartmentEquipment, DepartmentEquipmentDTO>(
-                entityCollection: new ObservableCollection<DepartmentEquipment>(currentEquipment),
-                allPossibleItems: allPossibleEquipment
-                    .Where(oe => !currentEquipment.Any(de => de.OrgEquipmentId == oe.OrganizationEquipmentId))
-                    .Select(oe => new DepartmentEquipment
-                    {
-                        OrgEquipmentId = oe.OrganizationEquipmentId,
-                        DepartmentId = department.ConstructionDepartmentId,
-                        DepartEquipmentQuantity = 0,
-                        OrgEquipment = oe
-                    }),
-                entityToViewModel: de => new DepartmentEquipmentDTO
-                {
-                    DepartmentEquipmentId = de.DepartmentEquipmentId,
-                    OrgEquipmentId = de.OrgEquipmentId,
-                    DepartmentId = de.DepartmentId,
-                    DepartEquipmentQuantity = de.DepartEquipmentQuantity,
-                    EquipmentName = de.OrgEquipment.EquipmentName
-                },
-                viewModelToEntity: dto =>
-                {
-                    var existingEntity = dbContext.DepartmentEquipments.Local.FirstOrDefault(de =>
-                        de.DepartmentEquipmentId == dto.DepartmentEquipmentId);
-
-                    if (existingEntity != null)
-                    {
-                        existingEntity.DepartEquipmentQuantity = dto.DepartEquipmentQuantity;
-                        existingEntity.OrgEquipmentId = dto.OrgEquipmentId;
-                        existingEntity.DepartmentId = dto.DepartmentId;
-                        return existingEntity;
-                    }
-                    else
-                    {
-                        return new DepartmentEquipment
-                        {
-                            DepartmentEquipmentId = dto.DepartmentEquipmentId,
-                            OrgEquipmentId = dto.OrgEquipmentId,
-                            DepartmentId = dto.DepartmentId,
-                            DepartEquipmentQuantity = dto.DepartEquipmentQuantity,
-                            OrgEquipment = allPossibleEquipment.First(oe => oe.OrganizationEquipmentId == dto.OrgEquipmentId)
-                        };
-                    }
-                },
-                columns: columns,
-                columnControls: columnControls,
-                displayMember: nameof(DepartmentEquipmentDTO.EquipmentName),
-                sortSelector: dto => dto.EquipmentName,
-                label: "Изменение оборудования для строительного управления:",
-                addButtonText: "Добавить оборудование",
-                placeholderText: "Выберите оборудование",
-                onAdd: entity => dbContext.DepartmentEquipments.Add(entity),
-                onRemove: entity => dbContext.DepartmentEquipments.Remove(entity)
-            );
-        }
-        private void AddObjectEquipmentInObjectControls(Models.Object obj)
-        {
-            var allPossibleEquipment = dbContext.OrganizationEquipments.ToList();
-
-            var currentEquipment = dbContext.ObjectEquipments
-                .Where(oe => oe.EquipmentForObjectId == obj.ObjectId)
-                .Include(oe => oe.Equipment).ThenInclude(de => de.OrgEquipment).ToList();
-
-            var columns = new Dictionary<string, string>
-            {
-                { "Оборудование", nameof(ObjectEquipmentDTO.EquipmentName) },
-                {"Дата выдачи", nameof(ObjectEquipmentDTO.AssignmentDate) },
-                { "Количество", nameof(ObjectEquipmentDTO.EquipmentQuantity) },
-                {"Дата возврата", nameof(ObjectEquipmentDTO.ReturnDate) }
-            };
-
-            var columnControls = new Dictionary<string, Func<ObjectEquipmentDTO, Control>>
-            {
-                { nameof(ObjectEquipmentDTO.EquipmentName), dto => new TextBlock { Text = dto.EquipmentName, VerticalAlignment = VerticalAlignment.Center } },
-                { nameof(ObjectEquipmentDTO.EquipmentQuantity), dto => new NumericUpDown
-                {
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Minimum = 0,
-                    Maximum = int.MaxValue,
-                    FormatString = "F0"
-                } },
-                { nameof(ObjectEquipmentDTO.AssignmentDate), dto => 
-                {
-                    var datePicker = new DatePicker();
-                    var clearButton = new Button
-                    {
-                        Content = "×",
-                        Classes = { "ClearButton" }
-                    };
-                    clearButton.Click += (s, e) => datePicker.SelectedDate = null;
-
-                    var stackPanel = new StackPanel { Orientation = Orientation.Horizontal };
-                    stackPanel.Children.AddRange([datePicker, clearButton]);
-                    return stackPanel;
-                } },
-                { nameof(ObjectEquipmentDTO.ReturnDate), dto =>
-                {
-                    var datePicker = new DatePicker();
-                    var clearButton = new Button
-                    {
-                        Content = "×",
-                        Classes = { "ClearButton" }
-                    };
-                    clearButton.Click += (s, e) => datePicker.SelectedDate = null;
-
-                    var stackPanel = new StackPanel { Orientation = Orientation.Horizontal };
-                    stackPanel.Children.AddRange([datePicker, clearButton]);
-                    return stackPanel;
-                } }
-            };
-
-            SetupCollectionEditor<ObjectEquipment, ObjectEquipmentDTO>(
-                entityCollection: new ObservableCollection<ObjectEquipment>(currentEquipment),
-                allPossibleItems: allPossibleEquipment
-                    .SelectMany(orgEq => orgEq.DepartmentEquipments)
-                    .Where(de => !currentEquipment.Any(ce => ce.EquipmentId == de.DepartmentEquipmentId))
-                    .Select(de => new ObjectEquipment
-                    {
-                        EquipmentId = de.DepartmentEquipmentId,
-                        EquipmentForObjectId = obj.ObjectId,
-                        Equipment = de,
-                        AssignmentDate = DateOnly.FromDateTime(DateTime.Now),
-                        ReturnDate = null,
-                        EquipObjectQuantity = 0
-                    }),
-                entityToViewModel: oe => new ObjectEquipmentDTO
-                {
-                    EquipmentId = oe.EquipmentId,
-                    ObjectId = oe.EquipmentForObjectId,
-                    EquipmentQuantity = oe.EquipObjectQuantity,
-                    AssignmentDate = oe.AssignmentDate ?? DateOnly.FromDateTime(DateTime.Now),
-                    ReturnDate = oe.ReturnDate,
-                    EquipmentName = oe.Equipment.OrgEquipment.EquipmentName
-                },
-                viewModelToEntity: dto =>
-                {
-                    var existingEntity = dbContext.ObjectEquipments.Local.FirstOrDefault(oe =>
-                        oe.EquipmentId == dto.EquipmentId && oe.EquipmentForObjectId == dto.ObjectId);
-
-                    if (existingEntity != null)
-                    {
-                        existingEntity.AssignmentDate = dto.AssignmentDate;
-                        existingEntity.ReturnDate = dto.ReturnDate;
-                        existingEntity.EquipObjectQuantity = dto.EquipmentQuantity;
-                        return existingEntity;
-                    }
-                    else
-                    {
-                        return new ObjectEquipment
-                        {
-                            EquipmentId = dto.EquipmentId,
-                            EquipmentForObjectId = dto.ObjectId,
-                            EquipObjectQuantity = dto.EquipmentQuantity,
-                            AssignmentDate = dto.AssignmentDate,
-                            ReturnDate = dto.ReturnDate,
-                            Equipment = allPossibleEquipment.FirstOrDefault(oe => oe.DepartmentEquipments
-                                                            .Any(de => de.DepartmentEquipmentId == dto.EquipmentId))!.DepartmentEquipments
-                                                            .First(de => de.DepartmentEquipmentId == dto.EquipmentId)
-                        };
-                    }
-                },
-                columns: columns,
-                columnControls: columnControls,
-                displayMember: nameof(ObjectEquipmentDTO.EquipmentName),
-                sortSelector: dto => dto.EquipmentName,
-                label: "Изменение оборудования для объекта:",
-                addButtonText: "Добавить оборудование",
-                placeholderText: "Выберите оборудование",
-                onAdd: entity => dbContext.ObjectEquipments.Add(entity),
-                onRemove: entity => dbContext.ObjectEquipments.Remove(entity)
-            );
         }
         private void SetupCollectionEditor<TEntity, TViewModel>(
                         ICollection<TEntity> entityCollection,

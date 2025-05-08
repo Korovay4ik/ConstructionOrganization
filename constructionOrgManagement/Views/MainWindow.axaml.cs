@@ -14,6 +14,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        DataContext = new MainWindowViewModel();
     }
     private void ToggleTheme_Click(object sender, RoutedEventArgs e)
     {

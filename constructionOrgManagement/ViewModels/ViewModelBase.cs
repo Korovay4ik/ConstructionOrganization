@@ -1,18 +1,15 @@
-﻿using Avalonia.Controls.Notifications;
-using Avalonia.Notification;
+﻿using Avalonia.Notification;
 using CommunityToolkit.Mvvm.ComponentModel;
 using constructionOrgManagement.Models;
-using MsBox.Avalonia.Enums;
 using MsBox.Avalonia;
+using MsBox.Avalonia.Enums;
 using System;
-using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace constructionOrgManagement.ViewModels;
 
 public class ViewModelBase : ObservableObject
 {
-    public static readonly ConstructionOrganizationContext dbContext = new();
     public INotificationMessageManager NotificationManager { get; } = new NotificationMessageManager();
     protected INotificationMessage? _currentNotification;
 
