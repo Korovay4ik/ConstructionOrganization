@@ -34,14 +34,22 @@
 			<Setter Property="Background" Value="#3a3a3a"/>
 			<Setter Property="Padding" Value="5 5"/>
 		</Style>
+
+		<Style Selector="StackPanel.submenu-panel">
+			<Setter Property="Margin" Value="0"/>
+			<Setter Property="Spacing" Value="0"/>
+			<Setter Property="IsVisible" Value="False"/>
+			<Setter Property="Background" Value="{DynamicResource SystemControlBackgroundBaseLowBrush}"/>
+		</Style>
+
 	</Window.Styles>
 
 	<Grid>
 		<SplitView IsPaneOpen="{Binding #btnOpenMenu.IsChecked}"
                    DisplayMode="CompactInline"
                    PanePlacement="Left"
-                   OpenPaneLength="220"
-                   CompactPaneLength="50"
+                   OpenPaneLength="255"
+                   CompactPaneLength="51"
                    IsVisible="{Binding IsMenuVisible}">
 
 			<SplitView.Pane>
@@ -61,23 +69,92 @@
 
 					<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
 						<StackPanel>
-							<Button Classes="menu-button">
-								<TextBlock Text="🏠 Главная"/>
-							</Button>
+							<Button Classes="menu-button" 
+									Content="ℹ️ Информация"/>
 
 							<Button Classes="menu-button"
                                     Command="{Binding SwitchContent}"
-                                    CommandParameter="{x:Type vm:DataManipulationViewModel}">
-								<TextBlock Text="📊 Просмотр записей"/>
-							</Button>
+                                    CommandParameter="{x:Type vm:DataManipulationViewModel}"
+									Content ="📊 Просмотр записей"/>
 
-							<Button Classes="menu-button">
-								<TextBlock Text="ℹ️ Информация"/>
-							</Button>
+							<Border HorizontalAlignment="Center" Height="20">
+								<TextBlock Text="🔍 Запросы 🔍"
+										   IsVisible="{Binding #btnOpenMenu.IsChecked}"
+										   HorizontalAlignment="Center"/>
+							</Border>
 
-							<Button Classes="menu-button">
-								<TextBlock Text="🔍 Запросы"/>
-							</Button>
+							<StackPanel>
+								<Button Classes="menu-button"
+										Click="OnDropdownButtonClick" 
+										Content="🏢 Организационные данные ▼"/>
+
+								<StackPanel Classes="submenu-panel">
+									<Button Classes="menu-button"
+											Content="🏢 Управления и руководители"/>
+									
+									<Button Classes="menu-button"
+											Content="👨‍💼 Инженерный состав"/>
+								</StackPanel>
+							</StackPanel>
+
+							<StackPanel>
+								<Button Classes="menu-button"
+										Click="OnDropdownButtonClick"
+										Content="👥 Персонал и бригады ▼"/>
+
+								<StackPanel Classes="submenu-panel">
+									<Button Classes="menu-button"
+											Content="👷 Состав бригад на объекте"/>
+
+									<Button Classes="menu-button"
+											Content="🛠️ Работы бригады"/>
+									
+									<Button Classes="menu-button"
+											Content="👥 Бригады по виду работ"/>
+								</StackPanel>
+							</StackPanel>
+
+							<StackPanel>
+								<Button Classes="menu-button"
+										Click="OnDropdownButtonClick"
+										Content="🏗️ Объекты и техника ▼"/>
+
+								<StackPanel Classes="submenu-panel">
+									<Button Classes="menu-button"
+											Content="📅 Объекты и графики"
+											Command="{Binding ShowObjectScheduleQuery}"/>
+
+									<Button Classes="menu-button"
+											Content="🚜 Техника управления"/>
+
+									<Button Classes="menu-button"
+											Content="🏗️ Техника объекта"/>
+									
+									<Button Classes="menu-button"
+											Content="🔎 Объекты по видам работ"/>
+								</StackPanel>
+							</StackPanel>
+
+							<StackPanel>
+								<Button Classes="menu-button"
+										Click="OnDropdownButtonClick"
+										Content="📊 Отчетность и документы ▼"/>
+
+								<StackPanel Classes="submenu-panel">
+									<Button Classes="menu-button"
+											Content="📝 График и смета объекта"/>
+
+									<Button Classes="menu-button"
+											Content="📊 Отчет по объекту"/>
+
+									<Button Classes="menu-button"
+											Content="⏱️ Превышение сроков работ"/>
+									
+									<Button Classes="menu-button"
+											Content="💰 Превышение сметы"/>
+								</StackPanel>
+							</StackPanel>
+							
 						</StackPanel>
 					</ScrollViewer>
 
@@ -89,7 +166,7 @@
 						<Button Classes="danger-button"
                                 Command="{Binding LogoutCommand}"
                                 Content="👋 Сменить пользователя"/>
-
+						
 						<ToggleButton Name="btnOpenMenu"
 									  Classes="menu-button"
 									  HorizontalAlignment="Stretch"

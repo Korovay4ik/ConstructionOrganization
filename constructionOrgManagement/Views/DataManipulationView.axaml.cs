@@ -59,7 +59,7 @@ public partial class DataManipulationView : UserControl
                 });
             }
             
-            tableDataGrid.ItemsSource = data;
+            //tableDataGrid.ItemsSource = data;
         }
         catch (Exception ex)
         {
