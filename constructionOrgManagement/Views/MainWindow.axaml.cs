@@ -1,11 +1,8 @@
 using Avalonia;
-using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Styling;
 using constructionOrgManagement.ViewModels;
-using System;
 using System.Linq;
 
 namespace constructionOrgManagement.Views;

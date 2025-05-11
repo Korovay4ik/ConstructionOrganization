@@ -1,16 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
-using Pomelo.EntityFrameworkCore.MySql.Scaffolding.Internal;
 
 namespace constructionOrgManagement.Models;
 
 public partial class ConstructionOrganizationContext : DbContext
 {
-    public ConstructionOrganizationContext()
-    {
-    }
-
     public ConstructionOrganizationContext(DbContextOptions<ConstructionOrganizationContext> options)
         : base(options)
     {
@@ -562,7 +557,6 @@ public partial class ConstructionOrganizationContext : DbContext
             entity.Property(e => e.BrigadeName)
                 .HasMaxLength(100)
                 .HasColumnName("brigade_name");
-            entity.Property(e => e.CurrentDelayDays).HasColumnName("current_delay_days");
             entity.Property(e => e.DeadlineStatus)
                 .HasMaxLength(17)
                 .HasDefaultValueSql("''")

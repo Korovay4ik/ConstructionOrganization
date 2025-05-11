@@ -23,6 +23,7 @@ public partial class DataManipulationView : UserControl
     {
         if (DataContext is DataManipulationViewModel viewModel)
         {
+            viewModel.PropertyChanged -= ViewModel_PropertyChanged;
             viewModel.PropertyChanged += ViewModel_PropertyChanged;
         }
     }
@@ -58,8 +59,6 @@ public partial class DataManipulationView : UserControl
                     Binding = new Binding(prop.Name)
                 });
             }
-            
-            //tableDataGrid.ItemsSource = data;
         }
         catch (Exception ex)
         {

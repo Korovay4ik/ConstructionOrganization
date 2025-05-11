@@ -14,7 +14,6 @@ using System.Threading.Tasks;
 
 namespace constructionOrgManagement.ViewModels
 {
-    
     public partial class DataManipulationViewModel : ViewModelBase
     {
         private string? _selectedTable;

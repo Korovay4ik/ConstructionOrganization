@@ -1,20 +1,11 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Presenters;
-using Avalonia.Controls.Templates;
 using Avalonia.Data;
-using Avalonia.Data.Converters;
-using Avalonia.Markup.Xaml;
-using Avalonia.Styling;
-using Avalonia.Threading;
 using constructionOrgManagement.ViewModels;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
+using System.ComponentModel;
 using System.Linq;
-using static Pomelo.EntityFrameworkCore.MySql.Query.ExpressionTranslators.Internal.MySqlJsonTableExpression;
 
 namespace constructionOrgManagement.Views;
 
@@ -25,6 +16,24 @@ public partial class QueriesView : UserControl
     {
         Instance = this;
         InitializeComponent();
+
+        DataContextChanged += OnDataContextChanged;
+    }
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        if (DataContext is QueriesViewModel viewModel)
+        {
+            viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            viewModel.PropertyChanged += ViewModel_PropertyChanged;
+        }
+    }
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(QueriesViewModel.CurrentQueryData) &&
+            DataContext is QueriesViewModel viewModel)
+        {
+            GenerateDataGridColumns(viewModel.CurrentQueryData!, viewModel.DataGridColumns);
+        }
     }
     public void GenerateDataGridColumns(IEnumerable data, List<ViewModels.DataGridColumnInfo> dataGridColumns)
     {
@@ -33,36 +42,48 @@ public partial class QueriesView : UserControl
         if (data == null || !data.GetEnumerator().MoveNext())
             return;
 
-        if (dataGridColumns?.Count > 0)
+        try
         {
-            foreach (var columnInfo in dataGridColumns)
+            if (dataGridColumns?.Count > 0)
             {
-                var column = new DataGridTextColumn
+                foreach (var columnInfo in dataGridColumns)
                 {
-                    Header = columnInfo.Header,
-                    Binding = new Binding(columnInfo.PropertyName)
-                    //{
-                    //    StringFormat = columnInfo.FormatString
-                    //}
-                };
-                queriesDataGrid.Columns.Add(column);
-            }
-        }
-        else
-        {
-            var firstItem = data.Cast<object>().First();
-            var properties = firstItem.GetType().GetProperties();
+                    var binding = new Binding(columnInfo.PropertyName)
+                    {
+                        StringFormat = columnInfo.FormatString,
+                        TargetNullValue = columnInfo.NullValue,
+                        FallbackValue = columnInfo.NullValue
+                    };
 
-            foreach (var prop in properties)
+                    var column = new DataGridTextColumn
+                    {
+                        Header = columnInfo.Header,
+                        Binding = binding,
+                        CanUserSort = true
+                    };
+
+                    queriesDataGrid.Columns.Add(column);
+                }
+            }
+            else
             {
-                queriesDataGrid.Columns.Add(new DataGridTextColumn
+                var firstItem = data.Cast<object>().First();
+                var properties = firstItem.GetType().GetProperties();
+
+                foreach (var prop in properties)
                 {
-                    Header = prop.Name,
-                    Binding = new Binding(prop.Name),
-                    Width = DataGridLength.Auto
-                });
+                    queriesDataGrid.Columns.Add(new DataGridTextColumn
+                    {
+                        Header = prop.Name,
+                        Binding = new Binding(prop.Name),
+                        Width = DataGridLength.Auto
+                    });
+                }
             }
         }
-        queriesDataGrid.ItemsSource = data as IList ?? data.Cast<object>().ToList();
+        catch(Exception)
+        {
+
+        }
     }
 }

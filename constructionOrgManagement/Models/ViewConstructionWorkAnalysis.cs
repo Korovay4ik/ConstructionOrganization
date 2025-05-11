@@ -39,8 +39,6 @@ public partial class ViewConstructionWorkAnalysis
 
     public int? DelayDays { get; set; }
 
-    public int? CurrentDelayDays { get; set; }
-
     public string WorkStatus { get; set; } = null!;
 
     public string DeadlineStatus { get; set; } = null!;

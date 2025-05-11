@@ -57,6 +57,7 @@ namespace constructionOrgManagement.ViewModels
                 IsMenuVisible = true;
                 LoadViewModel();
                 SwitchContent(typeof(DataManipulationViewModel));
+
             }
             catch (Exception ex)
             {
@@ -79,56 +80,29 @@ namespace constructionOrgManagement.ViewModels
             _dataEditVM = new DataEditViewModel(_dbContext);
             _queriesVM = new QueriesViewModel(_dbContext);
         }
-        public void ShowObjectScheduleQuery()
+        private void ShowQueryWindow<TView>(
+                     string title,
+                     string description,
+                     List<QueryParameterInfo> parameters,
+                     Func<Dictionary<string, object>, List<DataGridColumnInfo>> columnSelector,
+                     Func<ConstructionOrganizationContext, Dictionary<string, object>, IQueryable<TView>> queryExecutor)
+                     where TView : class
         {
             if (_dbContext == null) return;
 
             var queryInfo = new QueryInfo
             {
-                Title = "График и смета на строительство объекта",
-                Description = "Получение графика и сметы на строительство указанного объекта",
-                Parameters =
-            [
-                new() {
-                    Name = "Название объекта",
-                    ParameterType = typeof(string),
-                    DefaultValue = "",
-                    AvailableValues = [.._dbContext.Objects.OrderBy(o=>o.ObjectName).Select(o=>o.ObjectName)]
-                },
-                //new() {
-                //    Name = "Дата начала периода",
-                //    ParameterType = typeof(DateTime),
-                //    DefaultValue = DateTime.Today.AddMonths(-1)
-                //},
-                //new() {
-                //    Name = "Дата окончания периода",
-                //    ParameterType = typeof(DateTime),
-                //    DefaultValue = DateTime.Today
-                //}
-            ],
-                Columns =
-                [
-                    new()
-                    {
-                        PropertyName = nameof(ViewObjectScheduleAndEstimate.ObjectName),
-                        Header = "Объект",
-                    }
-                ]
+                Title = title,
+                Description = description,
+                Parameters = parameters,
+                ColumnSelector = columnSelector
             };
 
             SwitchContent(typeof(QueriesViewModel));
             if (ContentSwitcher is not QueriesViewModel queriesVm) return;
-            queriesVm.Initialize(queryInfo, (db, parameters) =>
-            {
-                var objectName = (string)parameters["Название объекта"];
-                //var startDate = (DateOnly)parameters["Дата начала периода"];
-                //var endDate = (DateOnly)parameters["Дата окончания периода"];
+            queriesVm.CurrentQueryData?.Clear();
 
-                return db.Set<ViewObjectScheduleAndEstimate>()
-                    .Where(x => x.ObjectName.Contains(objectName) /*&&
-                                (x.PlannedStartDate >= startDate || x.ActualStartDate >= startDate) &&
-                                (x.PlannedEndDate <= endDate || x.ActualEndDate <= endDate)*/);
-            });
+            queriesVm.Initialize(queryInfo, (db, parameters) => queryExecutor(db, parameters));
         }
     }
 }

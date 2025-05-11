@@ -69,8 +69,8 @@
 
 					<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
 						<StackPanel>
-							<Button Classes="menu-button" 
-									Content="ℹ️ Информация"/>
+							<!--<Button Classes="menu-button" 
+									Content="ℹ️ Информация"/>-->
 
 							<Button Classes="menu-button"
                                     Command="{Binding SwitchContent}"
@@ -90,10 +90,12 @@
 
 								<StackPanel Classes="submenu-panel">
 									<Button Classes="menu-button"
-											Content="🏢 Управления и руководители"/>
+											Content="🏢 Управления и руководители"
+											Command="{Binding ShowDepartmentSupervisorCommand}"/>
 									
 									<Button Classes="menu-button"
-											Content="👨‍💼 Инженерный состав"/>
+											Content="👨‍💼 Инженерный состав"
+											Command="{Binding ShowEngineeringAndTechnicalStaffQueryCommand}"/>
 								</StackPanel>
 							</StackPanel>
 
@@ -104,13 +106,16 @@
 
 								<StackPanel Classes="submenu-panel">
 									<Button Classes="menu-button"
-											Content="👷 Состав бригад на объекте"/>
+											Content="👷 Состав бригад на объекте"
+											Command="{Binding ShowBrigadeOnObjectQueryCommand}"/>
 
 									<Button Classes="menu-button"
-											Content="🛠️ Работы бригады"/>
+											Content="🛠️ Работы бригады"
+											Command="{Binding ShowWorkTypeBrigadeQueryCommand}"/>
 									
 									<Button Classes="menu-button"
-											Content="👥 Бригады по виду работ"/>
+											Content="👥 Бригады по виду работ"
+											Command="{Binding ShowBrigadeByWorkTypeQueryCommand}"/>
 								</StackPanel>
 							</StackPanel>
 
@@ -122,16 +127,19 @@
 								<StackPanel Classes="submenu-panel">
 									<Button Classes="menu-button"
 											Content="📅 Объекты и графики"
-											Command="{Binding ShowObjectScheduleQuery}"/>
+											Command="{Binding ShowObjectWithScheduleQueryCommand}"/>
 
 									<Button Classes="menu-button"
-											Content="🚜 Техника управления"/>
+											Content="🚜 Техника управления"
+											Command="{Binding ShowDepartmentEquipmentQueryCommand}"/>
 
 									<Button Classes="menu-button"
-											Content="🏗️ Техника объекта"/>
+											Content="🏗️ Техника объекта"
+											Command="{Binding ShowObjectEquipmentQueryCommand}"/>
 									
 									<Button Classes="menu-button"
-											Content="🔎 Объекты по видам работ"/>
+											Content="🔎 Объекты по видам работ"
+											Command="{Binding ShowObjectsWithWorkTypesQueryCommand}"/>
 								</StackPanel>
 							</StackPanel>
 
@@ -142,16 +150,20 @@
 
 								<StackPanel Classes="submenu-panel">
 									<Button Classes="menu-button"
-											Content="📝 График и смета объекта"/>
+											Content="📝 График и смета объекта"
+											Command="{Binding ShowObjectScheduleQueryCommand}"/>
 
 									<Button Classes="menu-button"
-											Content="📊 Отчет по объекту"/>
+											Content="📊 Отчет по объекту"
+											Command="{Binding ShowObjectReportQueryCommand}"/>
 
 									<Button Classes="menu-button"
-											Content="⏱️ Превышение сроков работ"/>
+											Content="⏱️ Превышение сроков работ"
+											Command="{Binding ShowWorkTypeWithDelayQueryCommand}"/>
 									
 									<Button Classes="menu-button"
-											Content="💰 Превышение сметы"/>
+											Content="💰 Превышение сметы"
+											Command="{Binding ShowMaterialWithOverEstimateQueryCommand}"/>
 								</StackPanel>
 							</StackPanel>
 							
